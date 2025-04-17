@@ -104,7 +104,11 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
   }
 
   const handleSave = () => {
-    if (!linkedinUrl || !name) return
+    // Only require name as mandatory field, make linkedinUrl optional
+    if (!name) {
+      alert("Please enter a contact name");
+      return;
+    }
 
     // Get key points from all recordings
     const allKeyPoints = recordings.flatMap((r) => r.keyPoints)
@@ -113,7 +117,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
       id: existingContact?.id || Date.now().toString(),
       eventId: event.id,
       eventTitle: event.title,
-      linkedinUrl,
+      linkedinUrl: linkedinUrl || "",
       name,
       position,
       company,
@@ -128,6 +132,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
       date: existingContact?.date || new Date().toLocaleDateString(),
     }
 
+    console.log("Saving contact:", contact);
     onSave(contact)
   }
 

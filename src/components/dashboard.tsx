@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { EventList } from "@/components/events/event-list"
 import { ContactList } from "@/components/contacts/contact-list"
@@ -8,20 +8,21 @@ import { ContactDetail } from "@/components/contacts/contact-detail"
 import { TaskList } from "@/components/tasks/task-list"
 import { Button } from "@/components/ui/button"
 import { Plus, Calendar, Users, CheckSquare, User } from "lucide-react"
-import { EventForm } from "@/components/events/event-form"
 import { ContactForm } from "@/components/contacts/contact-form"
-import { useLocalStorage } from "@/hooks/storage/use-local-storage"
 import { ProfileSection } from "@/components/profile/profile-section"
 import { CreateOptions } from "@/components/common/create-options"
 import { EventSelector } from "@/components/events/event-selector"
+import { ClientEventForm } from "@/components/events/client-event-form"
+import { toast } from "@/components/ui/use-toast"
 
+// Define the client-side types that match how the UI needs the data
 export type Event = {
   id: string
   title: string
-  location?: string
-  company?: string
+  location: string
+  company: string
   date: string
-  colorIndex: string // Add this property to store the color index
+  colorIndex: string 
 }
 
 export type ActionItem = {
@@ -57,359 +58,152 @@ export type Task = ActionItem & {
   eventTitle: string
 }
 
+// Use mock data for now to simplify
+const MOCK_EVENTS: Event[] = [
+  {
+    id: "1",
+    title: "Tech Conference 2023",
+    location: "San Francisco, CA",
+    company: "TechExpo",
+    date: "2023-06-15",
+    colorIndex: "2"
+  },
+  {
+    id: "2",
+    title: "Networking Mixer",
+    location: "New York, NY",
+    company: "Business Network",
+    date: "2023-07-20",
+    colorIndex: "5"
+  }
+];
+
+const MOCK_CONTACTS: Contact[] = [
+  {
+    id: "1",
+    eventId: "1",
+    eventTitle: "Tech Conference 2023",
+    linkedinUrl: "https://linkedin.com/in/johndoe",
+    name: "John Doe",
+    position: "Senior Developer",
+    company: "TechCorp",
+    summary: "Met at the JavaScript workshop. Interested in collaboration.",
+    voiceMemo: {
+      url: "",
+      transcript: "",
+      keyPoints: []
+    },
+    actionItems: [
+      {
+        id: "1-1",
+        text: "Send follow-up email",
+        dueDate: "2023-06-20",
+        completed: false
+      },
+      {
+        id: "1-2",
+        text: "Share project proposal",
+        dueDate: "2023-06-25",
+        completed: true
+      }
+    ],
+    rating: 4,
+    date: "2023-06-15"
+  }
+];
+
 export default function Dashboard() {
+  console.log("Dashboard component rendering");
+  
+  // For debugging purposes
+  const renderCountRef = useRef(0);
+  
+  // Track render count
+  useEffect(() => {
+    renderCountRef.current += 1;
+    console.log(`Dashboard render count: ${renderCountRef.current}`);
+    
+    // Report when we might be in an infinite loop
+    if (renderCountRef.current > 25) {
+      console.error("Potential infinite rendering detected in Dashboard");
+    }
+  }, []);
+  
   const [activeTab, setActiveTab] = useState("events")
   const [showEventForm, setShowEventForm] = useState(false)
-  const [events, setEvents] = useLocalStorage<Event[]>("networkProEvents", [])
-  const [contacts, setContacts] = useLocalStorage<Contact[]>("networkProContacts", [])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
   const [showContactForm, setShowContactForm] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null)
   const [showCreateOptions, setShowCreateOptions] = useState(false)
   const [showEventSelector, setShowEventSelector] = useState(false)
-
-  // Load mock data if no data exists
+  const [uiEvents, setUIEvents] = useState<Event[]>([])
+  const [uiContacts, setUIContacts] = useState<Contact[]>([])
+  
+  // Fetch events from API endpoint instead of using server actions
   useEffect(() => {
-    const loadMockData = async () => {
-      // Only load mock data if both events and contacts are empty
-      if (events.length === 0 && contacts.length === 0) {
-        try {
-          // Instead of fetching from a file, use inline mock data
-          const mockData = {
-            events: [
-              {
-                id: "evt-001",
-                title: "Tech Innovators Conference",
-                location: "San Francisco, CA",
-                company: "TechCorp Inc.",
-                date: "April 10, 2025",
-                colorIndex: "0", // Add color indices to mock data
-              },
-              {
-                id: "evt-002",
-                title: "Startup Networking Mixer",
-                location: "New York, NY",
-                company: "Venture Capital Partners",
-                date: "April 5, 2025",
-                colorIndex: "1",
-              },
-              {
-                id: "evt-003",
-                title: "Women in Tech Summit",
-                location: "Chicago, IL",
-                company: "WIT Foundation",
-                date: "March 28, 2025",
-                colorIndex: "2",
-              },
-              {
-                id: "evt-004",
-                title: "AI & Machine Learning Expo",
-                location: "Austin, TX",
-                company: "Future AI Labs",
-                date: "March 15, 2025",
-                colorIndex: "3",
-              },
-            ],
-            contacts: [
-              {
-                id: "cnt-001",
-                eventId: "evt-001",
-                eventTitle: "Tech Innovators Conference",
-                linkedinUrl: "https://linkedin.com/in/sarahjohnson",
-                name: "Sarah Johnson",
-                position: "CTO",
-                company: "InnovateTech",
-                summary:
-                  "Experienced CTO with a focus on AI and machine learning. Looking for partnerships in the healthcare tech space.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "Sarah mentioned her company is expanding into healthcare AI. They're looking for data partners and have a new product launching in Q3. She previously worked at Google Health.",
-                  keyPoints: [
-                    "Expanding into healthcare AI",
-                    "Looking for data partnerships",
-                    "New product launch in Q3",
-                  ],
-                },
-                actionItems: [
-                  {
-                    id: "act-001",
-                    text: "Send healthcare AI whitepaper",
-                    dueDate: "2025-04-15",
-                    completed: false,
-                  },
-                  {
-                    id: "act-002",
-                    text: "Introduce to Dr. Michael from MedTech",
-                    dueDate: "2025-04-20",
-                    completed: false,
-                  },
-                  {
-                    id: "act-003",
-                    text: "Follow up about partnership opportunity",
-                    dueDate: "2025-05-01",
-                    completed: false,
-                  },
-                ],
-                rating: 5,
-                date: "April 10, 2025",
-              },
-              {
-                id: "cnt-002",
-                eventId: "evt-001",
-                eventTitle: "Tech Innovators Conference",
-                linkedinUrl: "https://linkedin.com/in/davidchen",
-                name: "David Chen",
-                position: "Product Manager",
-                company: "CloudScale",
-                summary:
-                  "Product manager specializing in cloud infrastructure products. Interested in our API integration capabilities.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "David's team is building a new developer platform. They're interested in our API documentation approach and might want to collaborate on standards.",
-                  keyPoints: [
-                    "Building new developer platform",
-                    "Interested in API documentation",
-                    "Potential collaboration on standards",
-                  ],
-                },
-                actionItems: [
-                  {
-                    id: "act-004",
-                    text: "Share API documentation templates",
-                    dueDate: "2025-04-12",
-                    completed: true,
-                  },
-                  {
-                    id: "act-005",
-                    text: "Schedule technical demo",
-                    dueDate: "2025-04-18",
-                    completed: false,
-                  },
-                ],
-                rating: 4,
-                date: "April 10, 2025",
-              },
-              {
-                id: "cnt-003",
-                eventId: "evt-002",
-                eventTitle: "Startup Networking Mixer",
-                linkedinUrl: "https://linkedin.com/in/emilywong",
-                name: "Emily Wong",
-                position: "Founder & CEO",
-                company: "GreenTech Solutions",
-                summary:
-                  "Founder of a sustainability-focused startup. Looking for technical advisors and potential investors.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "Emily's startup is focused on reducing carbon footprints for businesses. They have an innovative approach to measuring and offsetting emissions. Currently raising a seed round.",
-                  keyPoints: [
-                    "Sustainability-focused startup",
-                    "Innovative carbon measurement",
-                    "Raising seed funding",
-                  ],
-                },
-                actionItems: [
-                  {
-                    id: "act-006",
-                    text: "Connect with angel investor network",
-                    dueDate: "2025-04-08",
-                    completed: false,
-                  },
-                  {
-                    id: "act-007",
-                    text: "Send technical advisor application",
-                    dueDate: "2025-04-14",
-                    completed: false,
-                  },
-                ],
-                rating: 5,
-                date: "April 5, 2025",
-              },
-              {
-                id: "cnt-004",
-                eventId: "evt-002",
-                eventTitle: "Startup Networking Mixer",
-                linkedinUrl: "https://linkedin.com/in/marcusrodriguez",
-                name: "Marcus Rodriguez",
-                position: "VP of Sales",
-                company: "SaaS Growth Partners",
-                summary:
-                  "Sales executive specializing in B2B SaaS. Has connections with several enterprise clients we've been targeting.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "Marcus works with enterprise clients in finance and healthcare. He mentioned Acme Corp is looking for our type of solution and he could make an introduction.",
-                  keyPoints: [
-                    "Works with finance and healthcare clients",
-                    "Can introduce to Acme Corp",
-                    "Experienced in enterprise sales cycles",
-                  ],
-                },
-                actionItems: [
-                  {
-                    id: "act-008",
-                    text: "Send company overview for Acme intro",
-                    dueDate: "2025-04-07",
-                    completed: true,
-                  },
-                  {
-                    id: "act-009",
-                    text: "Schedule coffee meeting",
-                    dueDate: "2025-04-13",
-                    completed: false,
-                  },
-                ],
-                rating: 4,
-                date: "April 5, 2025",
-              },
-              {
-                id: "cnt-005",
-                eventId: "evt-003",
-                eventTitle: "Women in Tech Summit",
-                linkedinUrl: "https://linkedin.com/in/priyapatel",
-                name: "Priya Patel",
-                position: "Engineering Director",
-                company: "TechDiversity Inc.",
-                summary:
-                  "Engineering leader focused on building diverse tech teams. Interested in our internship program and hiring practices.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "Priya runs a mentorship program for underrepresented groups in tech. She's interested in partnering on workshops and potentially setting up a talent pipeline.",
-                  keyPoints: [
-                    "Runs mentorship program",
-                    "Interested in workshop partnership",
-                    "Potential talent pipeline",
-                  ],
-                },
-                actionItems: [
-                  {
-                    id: "act-010",
-                    text: "Share internship program details",
-                    dueDate: "2025-04-01",
-                    completed: true,
-                  },
-                  {
-                    id: "act-011",
-                    text: "Propose workshop collaboration",
-                    dueDate: "2025-04-10",
-                    completed: false,
-                  },
-                  {
-                    id: "act-012",
-                    text: "Introduce to HR director",
-                    dueDate: "2025-04-15",
-                    completed: false,
-                  },
-                ],
-                rating: 5,
-                date: "March 28, 2025",
-              },
-              {
-                id: "cnt-006",
-                eventId: "evt-004",
-                eventTitle: "AI & Machine Learning Expo",
-                linkedinUrl: "https://linkedin.com/in/jameslee",
-                name: "James Lee",
-                position: "AI Research Scientist",
-                company: "DeepMind Technologies",
-                summary:
-                  "AI researcher specializing in natural language processing. Interested in our dataset and annotation methods.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "James is working on a new NLP model and is looking for high-quality training data. He's also interested in our annotation platform and might want to collaborate on research.",
-                  keyPoints: ["Working on new NLP model", "Needs training data", "Interested in annotation platform"],
-                },
-                actionItems: [
-                  {
-                    id: "act-013",
-                    text: "Send dataset documentation",
-                    dueDate: "2025-03-20",
-                    completed: true,
-                  },
-                  {
-                    id: "act-014",
-                    text: "Schedule demo of annotation platform",
-                    dueDate: "2025-03-25",
-                    completed: true,
-                  },
-                  {
-                    id: "act-015",
-                    text: "Discuss research collaboration",
-                    dueDate: "2025-04-05",
-                    completed: false,
-                  },
-                ],
-                rating: 4,
-                date: "March 15, 2025",
-              },
-              {
-                id: "cnt-007",
-                eventId: "evt-004",
-                eventTitle: "AI & Machine Learning Expo",
-                linkedinUrl: "https://linkedin.com/in/sophiawilliams",
-                name: "Sophia Williams",
-                position: "Head of Innovation",
-                company: "Enterprise Solutions",
-                summary:
-                  "Innovation leader at a large enterprise. Looking for AI solutions to improve customer service operations.",
-                voiceMemo: {
-                  url: "",
-                  transcript:
-                    "Sophia's team is evaluating AI chatbot solutions for customer service. They have a large support team and want to automate routine inquiries. Budget approval expected in Q2.",
-                  keyPoints: ["Evaluating AI chatbots", "Large customer support team", "Budget approval in Q2"],
-                },
-                actionItems: [
-                  {
-                    id: "act-016",
-                    text: "Send case studies on customer service AI",
-                    dueDate: "2025-03-18",
-                    completed: true,
-                  },
-                  {
-                    id: "act-017",
-                    text: "Prepare ROI analysis",
-                    dueDate: "2025-04-01",
-                    completed: false,
-                  },
-                  {
-                    id: "act-018",
-                    text: "Follow up on budget approval",
-                    dueDate: "2025-04-15",
-                    completed: false,
-                  },
-                ],
-                rating: 5,
-                date: "March 15, 2025",
-              },
-            ],
-          }
-
-          if (mockData.events && mockData.events.length > 0) {
-            setEvents(mockData.events)
-          }
-
-          if (mockData.contacts && mockData.contacts.length > 0) {
-            setContacts(mockData.contacts)
-          }
-        } catch (error) {
-          console.error("Failed to load mock data:", error)
+    const fetchEvents = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch events from the API
+        const response = await fetch('/api/events');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch events');
         }
+        
+        const eventsData = await response.json();
+        setUIEvents(eventsData);
+        
+        // After fetching events, fetch contacts
+        await fetchContacts();
+        
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setError('Failed to load data. Please try again later.');
+        setIsLoading(false);
       }
-      setIsLoading(false)
-    }
+    };
 
-    loadMockData()
-  }, [events.length, contacts.length, setEvents, setContacts])
+    const fetchContacts = async () => {
+      try {
+        // Fetch contacts from the API
+        const response = await fetch('/api/contacts');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch contacts');
+        }
+        
+        const contactsData = await response.json();
+        setUIContacts(contactsData);
+      } catch (error) {
+        console.error('Error fetching contacts:', error);
+        // Don't set error state here as we already have events loaded
+      }
+    };
+    
+    // For development mock data fallback
+    const setMockContacts = () => {
+      // Only set mock contacts if we don't have any from the API
+      if (uiContacts.length === 0) {
+        setUIContacts(MOCK_CONTACTS);
+      }
+    };
+    
+    fetchEvents();
+    
+    // Set some mock contacts for development
+    if (process.env.NODE_ENV === 'development') {
+      setMockContacts();
+    }
+  }, []);
 
   // Derive tasks from contacts and their action items
-  const tasks: Task[] = contacts.flatMap((contact) =>
+  const tasks: Task[] = uiContacts.flatMap((contact) =>
     contact.actionItems.map((item) => ({
       ...item,
       contactId: contact.id,
@@ -419,15 +213,17 @@ export default function Dashboard() {
     })),
   )
 
-  const handleCreateEvent = (event: Event) => {
-    setEvents([...events, event])
-    setShowEventForm(false)
+  const handleCreateEvent = async (event: Event) => {
+    // Client-side form will handle the API call and UI updates
+    // Just add the new event to our UI state
+    setUIEvents(prev => [event, ...prev]);
+    setShowEventForm(false);
 
     // If we were in the event selector flow, continue to contact form with the new event
     if (showEventSelector) {
-      setShowEventSelector(false)
-      setSelectedEvent(event)
-      setShowContactForm(true)
+      setShowEventSelector(false);
+      setSelectedEvent(event);
+      setShowContactForm(true);
     }
   }
 
@@ -458,7 +254,7 @@ export default function Dashboard() {
   }
 
   const handleAddContact = (contact: Contact) => {
-    setContacts([...contacts, contact])
+    setUIContacts([...uiContacts, contact])
     setShowContactForm(false)
   }
 
@@ -474,25 +270,104 @@ export default function Dashboard() {
     }
   }
 
-  const handleSaveContact = (updatedContact: Contact) => {
-    // Check if this is an update or a new contact
-    if (contactToEdit) {
-      // Update existing contact
-      const updatedContacts = contacts.map((c) => (c.id === updatedContact.id ? updatedContact : c))
-      setContacts(updatedContacts)
+  // Helper function to perform a proper logout
+  const handleLogout = async () => {
+    try {
+      console.log("Logging out and clearing auth");
+      
+      // First clear all cookies using our clearall endpoint
+      await fetch('/api/auth/clearall', { method: 'POST' });
+      
+      // Then call the normal logout endpoint
+      const response = await fetch('/api/auth/logout', { 
+        method: 'POST',
+        headers: {
+          'Cache-Control': 'no-cache, no-store'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Logout failed:', response.statusText);
+      }
+      
+      // Force reload the page to clear any cached state
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Fallback: direct to login
+      window.location.href = '/login';
+    }
+  };
 
-      // If we were viewing this contact's details, update the selected contact
-      if (selectedContact && selectedContact.id === updatedContact.id) {
-        setSelectedContact(updatedContact)
+  // Helper function to clear browser cache and reload
+  const handleClearCache = () => {
+    try {
+      // Clear localStorage items related to this app
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('touchgrass') || key.includes('networkpro') || key.includes('contact'))) {
+          localStorage.removeItem(key);
+        }
+      }
+      
+      // Clear sessionStorage
+      sessionStorage.clear();
+      
+      // Force a hard reload to bypass cache
+      window.location.reload();
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+      alert('Failed to clear cache. Try manually clearing your browser cache.');
+    }
+  };
+
+  const handleSaveContact = async (updatedContact: Contact) => {
+    try {
+      console.log("handleSaveContact called with:", updatedContact);
+      
+      // Check if this is an update or a new contact
+      if (contactToEdit) {
+        console.log("Updating existing contact");
+        // Update existing contact - Future: implement PUT to contacts API
+        const updatedContacts = uiContacts.map((c) => (c.id === updatedContact.id ? updatedContact : c))
+        setUIContacts(updatedContacts)
+
+        // If we were viewing this contact's details, update the selected contact
+        if (selectedContact && selectedContact.id === updatedContact.id) {
+          setSelectedContact(updatedContact)
+        }
+
+        setContactToEdit(null)
+      } else {
+        console.log("Creating new contact via API");
+        // Add new contact via API
+        const response = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updatedContact),
+        });
+
+        console.log("API response status:", response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error saving contact:', errorData);
+          alert("Failed to save contact. See console for details.");
+        } else {
+          const newContact = await response.json();
+          console.log("Received new contact from API:", newContact);
+          // Add the returned contact from API to our UI state
+          setUIContacts([...uiContacts, newContact]);
+        }
       }
 
-      setContactToEdit(null)
-    } else {
-      // Add new contact
-      setContacts([...contacts, updatedContact])
+      setShowContactForm(false)
+    } catch (error) {
+      console.error('Failed to save contact:', error);
+      alert("An error occurred while saving the contact. Please try again.");
     }
-
-    setShowContactForm(false)
   }
 
   const handleCancelEdit = () => {
@@ -501,7 +376,7 @@ export default function Dashboard() {
   }
 
   const handleUpdateTaskStatus = (taskId: string, completed: boolean) => {
-    const updatedContacts = contacts.map((contact) => {
+    const updatedContacts = uiContacts.map((contact) => {
       const updatedItems = contact.actionItems.map((item) => (item.id === taskId ? { ...item, completed } : item))
 
       if (JSON.stringify(updatedItems) !== JSON.stringify(contact.actionItems)) {
@@ -510,7 +385,7 @@ export default function Dashboard() {
       return contact
     })
 
-    setContacts(updatedContacts)
+    setUIContacts(updatedContacts)
 
     // If we're viewing a contact's details, update the selected contact
     if (selectedContact) {
@@ -528,13 +403,35 @@ export default function Dashboard() {
       setShowEventForm(true)
     } else {
       // For creating a contact, show the event selector first
-      if (events.length > 0) {
+      if (uiEvents.length > 0) {
         setShowEventSelector(true)
       } else {
         // If no events exist, show event form first
         setShowEventForm(true)
       }
     }
+  }
+
+  // Handle when the event form is showing
+  if (showEventForm) {
+    return (
+      <div className="container mx-auto max-w-4xl p-4 bg-background">
+        <header className="mb-4">
+          <div className="flex items-center">
+            <Button variant="ghost" onClick={() => setShowEventForm(false)} className="mr-2">
+              ← Back
+            </Button>
+            <h2 className="text-xl font-semibold">Create New Event</h2>
+          </div>
+        </header>
+        
+        <ClientEventForm 
+          onSubmit={handleCreateEvent} 
+          onCancel={() => setShowEventForm(false)} 
+          existingEvent={undefined} 
+        />
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -548,13 +445,29 @@ export default function Dashboard() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="container mx-auto max-w-4xl p-4 flex items-center justify-center h-screen bg-background">
+        <div className="text-center">
+          <div className="mb-4 text-red-500">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <p className="text-lg font-medium">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto max-w-4xl p-4 bg-background text-foreground">
-      <header className="mb-4">
-        <h1 className="text-xl font-bold">NetworkPro</h1>
-        <p className="text-xs text-muted-foreground">Manage your networking events and contacts</p>
-      </header>
-
       {selectedEvent ? (
         <div className="space-y-4 pb-16">
           {selectedContact ? (
@@ -588,7 +501,7 @@ export default function Dashboard() {
                   event={selectedEvent}
                   onSave={handleSaveContact}
                   onCancel={handleCancelEdit}
-                  existingContact={contactToEdit}
+                  existingContact={contactToEdit || undefined}
                 />
               ) : (
                 <div className="space-y-4">
@@ -601,7 +514,7 @@ export default function Dashboard() {
                   </div>
 
                   <ContactList
-                    contacts={contacts.filter((c) => c.eventId === selectedEvent.id)}
+                    contacts={uiContacts.filter((c) => c.eventId === selectedEvent.id)}
                     events={[selectedEvent]}
                     compact={false}
                     onEditContact={handleEditContact}
@@ -619,10 +532,10 @@ export default function Dashboard() {
               {/* Tab content remains at the top */}
               <TabsContent value="events" className="mt-4">
                 {showEventForm ? (
-                  <EventForm onSubmit={handleCreateEvent} onCancel={() => setShowEventForm(false)} />
+                  <ClientEventForm onSubmit={handleCreateEvent} onCancel={() => setShowEventForm(false)} />
                 ) : showEventSelector ? (
                   <EventSelector
-                    events={events}
+                    events={uiEvents}
                     onSelectEvent={handleSelectEvent}
                     onCancel={() => setShowEventSelector(false)}
                     onCreateNewEvent={() => {
@@ -631,141 +544,103 @@ export default function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EventList events={events} onSelectEvent={handleSelectEvent} contacts={contacts} />
+                  <EventList events={uiEvents} onSelectEvent={handleSelectEvent} contacts={uiContacts} />
                 )}
               </TabsContent>
-
               <TabsContent value="contacts" className="mt-4">
-                {contactToEdit ? (
+                {showContactForm ? (
                   <ContactForm
-                    event={events.find((e) => e.id === contactToEdit.eventId) || events[0]}
+                    event={selectedEvent!}
                     onSave={handleSaveContact}
                     onCancel={handleCancelEdit}
-                    existingContact={contactToEdit}
-                  />
-                ) : selectedContact ? (
-                  <ContactDetail
-                    contact={selectedContact}
-                    onBack={handleBackToContacts}
-                    onEdit={handleEditContact}
-                    onUpdateTask={handleUpdateTaskStatus}
-                  />
-                ) : showEventSelector ? (
-                  <EventSelector
-                    events={events}
-                    onSelectEvent={handleSelectEvent}
-                    onCancel={() => setShowEventSelector(false)}
-                    onCreateNewEvent={() => {
-                      setShowEventSelector(false)
-                      setShowEventForm(true)
-                    }}
+                    existingContact={contactToEdit || undefined}
                   />
                 ) : (
                   <ContactList
-                    contacts={contacts}
-                    events={events}
+                    contacts={uiContacts}
+                    events={uiEvents}
+                    compact={true}
                     onEditContact={handleEditContact}
                     onSelectContact={handleSelectContact}
                   />
                 )}
               </TabsContent>
-
               <TabsContent value="tasks" className="mt-4">
-                <TaskList tasks={tasks} events={events} contacts={contacts} onUpdateStatus={handleUpdateTaskStatus} />
+                <TaskList tasks={tasks} contacts={uiContacts} events={uiEvents} onUpdateStatus={handleUpdateTaskStatus} />
               </TabsContent>
-
               <TabsContent value="profile" className="mt-4">
                 <ProfileSection />
               </TabsContent>
             </Tabs>
+
+            {/* Bottom Navigation */}
+            <div className="fixed bottom-0 left-0 right-0 z-10 flex h-16 w-full justify-around bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] dark:bg-gray-800">
+              <button
+                onClick={() => setActiveTab("events")}
+                className={`flex w-1/5 flex-col items-center justify-center ${
+                  activeTab === "events"
+                    ? "text-primary"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <Calendar className="h-6 w-6" />
+                <span className="text-xs">Events</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("contacts")}
+                className={`flex w-1/5 flex-col items-center justify-center ${
+                  activeTab === "contacts"
+                    ? "text-primary"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <Users className="h-6 w-6" />
+                <span className="text-xs">Contacts</span>
+              </button>
+              <button
+                onClick={() => setShowCreateOptions(true)}
+                className="flex w-1/5 flex-col items-center justify-center rounded-full bg-primary p-1 text-white"
+              >
+                <Plus className="h-6 w-6" />
+                <span className="text-xs">New</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("tasks")}
+                className={`flex w-1/5 flex-col items-center justify-center ${
+                  activeTab === "tasks"
+                    ? "text-primary"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <CheckSquare className="h-6 w-6" />
+                <span className="text-xs">Tasks</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("profile")}
+                className={`flex w-1/5 flex-col items-center justify-center ${
+                  activeTab === "profile"
+                    ? "text-primary"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                <User className="h-6 w-6" />
+                <span className="text-xs">Profile</span>
+              </button>
+            </div>
+            {/* Add padding at the bottom to prevent content from being hidden behind the navigation */}
+            <div className="h-16"></div>
           </div>
+
+          {showCreateOptions && (
+            <CreateOptions 
+              onCreateEvent={() => handleCreateOptionSelect("event")} 
+              onCreateContact={() => handleCreateOptionSelect("contact")} 
+              onClose={() => setShowCreateOptions(false)}
+              showContactOption={uiEvents.length > 0 || selectedEvent !== null} 
+            />
+          )}
         </>
       )}
-
-      {/* Create Options Modal */}
-      {showCreateOptions && (
-        <CreateOptions
-          onCreateEvent={() => handleCreateOptionSelect("event")}
-          onCreateContact={() => handleCreateOptionSelect("contact")}
-          onClose={() => setShowCreateOptions(false)}
-          showContactOption={events.length > 0 || selectedEvent !== null}
-        />
-      )}
-
-      {/* Bottom navigation - now outside of conditional rendering so it's always visible */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-40">
-        <div className="flex items-center justify-around h-16">
-          <button
-            onClick={() => {
-              setActiveTab("events")
-              setSelectedEvent(null)
-              setSelectedContact(null)
-              setShowEventSelector(false)
-            }}
-            className={`flex flex-col items-center justify-center w-1/5 h-full ${
-              activeTab === "events" && !selectedEvent ? "text-primary" : "text-zinc-500"
-            }`}
-          >
-            <Calendar className="h-5 w-5" />
-            <span className="text-xs mt-1">Events</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveTab("contacts")
-              setSelectedEvent(null)
-              setSelectedContact(null)
-              setShowEventSelector(false)
-            }}
-            className={`flex flex-col items-center justify-center w-1/5 h-full ${
-              activeTab === "contacts" && !selectedEvent ? "text-primary" : "text-zinc-500"
-            }`}
-          >
-            <Users className="h-5 w-5" />
-            <span className="text-xs mt-1">Contacts</span>
-          </button>
-
-          <button
-            onClick={() => setShowCreateOptions(true)}
-            className="flex flex-col items-center justify-center w-1/5 h-full"
-          >
-            <div className="bg-primary text-primary-foreground rounded-full p-3 -mt-6 shadow-md">
-              <Plus className="h-5 w-5" />
-            </div>
-            <span className="text-xs mt-1">New</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveTab("tasks")
-              setSelectedEvent(null)
-              setSelectedContact(null)
-              setShowEventSelector(false)
-            }}
-            className={`flex flex-col items-center justify-center w-1/5 h-full ${
-              activeTab === "tasks" && !selectedEvent ? "text-primary" : "text-zinc-500"
-            }`}
-          >
-            <CheckSquare className="h-5 w-5" />
-            <span className="text-xs mt-1">Tasks</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveTab("profile")
-              setSelectedEvent(null)
-              setSelectedContact(null)
-              setShowEventSelector(false)
-            }}
-            className={`flex flex-col items-center justify-center w-1/5 h-full ${
-              activeTab === "profile" && !selectedEvent ? "text-primary" : "text-zinc-500"
-            }`}
-          >
-            <User className="h-5 w-5" />
-            <span className="text-xs mt-1">Profile</span>
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

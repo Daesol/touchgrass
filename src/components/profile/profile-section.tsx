@@ -1,26 +1,130 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { User, Settings, LogOut, HelpCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client"
+
+type Profile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  job_title: string | null;
+  company: string | null;
+  bio: string | null;
+}
 
 export function ProfileSection() {
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Fetch user and profile data on mount
+  useEffect(() => {
+    const fetchUserAndProfile = async () => {
+      try {
+        setLoading(true)
+        const supabase = createSupabaseBrowserClient()
+        
+        // Get the current user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        
+        setUser(user)
+        
+        // Get the user's profile
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+        
+        if (error) {
+          console.error('Error fetching profile:', error)
+        } else {
+          setProfile(profile)
+        }
+      } catch (error) {
+        console.error('Error in fetchUserAndProfile:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchUserAndProfile()
+  }, [])
+
+  // Handle sign out
+  const handleSignOut = async () => {
+    const supabase = createSupabaseBrowserClient()
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
+  // Set display name based on available profile data
+  const getDisplayName = () => {
+    if (profile?.display_name) return profile.display_name
+    if (profile?.first_name && profile?.last_name) return `${profile.first_name} ${profile.last_name}`
+    if (profile?.first_name) return profile.first_name
+    if (user?.email) return user.email.split('@')[0]
+    return 'User'
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center space-x-4">
+              <div className="h-16 w-16 rounded-full bg-muted"></div>
+              <div className="space-y-2">
+                <div className="h-4 w-24 bg-muted rounded"></div>
+                <div className="h-3 w-32 bg-muted rounded"></div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Separator />
+              <div className="grid gap-4">
+                <div className="h-10 bg-muted rounded"></div>
+                <div className="h-10 bg-muted rounded"></div>
+                <div className="h-10 bg-muted rounded"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src="https://api.dicebear.com/7.x/initials/svg?seed=User" alt="User" />
+              <AvatarImage 
+                src={profile?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${getDisplayName()}`} 
+                alt={getDisplayName()} 
+              />
               <AvatarFallback>
                 <User className="h-8 w-8" />
               </AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle>Your Profile</CardTitle>
-              <CardDescription>Manage your account settings and preferences</CardDescription>
+              <CardTitle>{getDisplayName()}</CardTitle>
+              <CardDescription>
+                {profile?.job_title} {profile?.company ? `at ${profile.company}` : ''}
+              </CardDescription>
+              {profile?.bio && (
+                <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -36,7 +140,11 @@ export function ProfileSection() {
                 <HelpCircle className="mr-2 h-4 w-4" />
                 Help & Support
               </Button>
-              <Button variant="outline" className="justify-start text-destructive hover:text-destructive">
+              <Button 
+                variant="outline" 
+                className="justify-start text-destructive hover:text-destructive"
+                onClick={handleSignOut}
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </Button>
@@ -56,7 +164,7 @@ export function ProfileSection() {
             important conversations, and follow-up tasks.
           </p>
           <div className="mt-4 text-xs text-muted-foreground">
-            <p>© 2025 NetworkPro. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} NetworkPro. All rights reserved.</p>
           </div>
         </CardContent>
       </Card>
