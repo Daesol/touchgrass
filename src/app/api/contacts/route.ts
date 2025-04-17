@@ -1,22 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerActionClient } from '@/lib/supabase/server-client';
 import { v4 as uuidv4 } from 'uuid';
 
-// Initialize Supabase client with env vars
-function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  
-  // Create client without auth
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    }
-  });
-  
-  return supabase;
-}
+// DEVELOPMENT MOCK USER - In production, this would come from auth
+// Use a static UUID so that contacts persist between page reloads
+const DEV_USER_ID = 'b3f5d3e1-c7a9-4f1b-9c6e-2d5a86bc2e11';
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Get contact data from client request
 function getContactData(body: any) {
@@ -50,11 +39,6 @@ function getContactData(body: any) {
   };
 }
 
-// DEVELOPMENT MOCK USER - In production, this would come from auth
-// Use a static UUID so that contacts persist between page reloads
-const DEV_USER_ID = 'b3f5d3e1-c7a9-4f1b-9c6e-2d5a86bc2e11';
-const isDevelopment = process.env.NODE_ENV === 'development';
-
 // POST - Create a new contact
 export async function POST(request: Request) {
   console.log("POST /api/contacts received");
@@ -80,7 +64,8 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
-    const supabase = getSupabaseClient();
+    // Use our enhanced server client with cookie handling
+    const supabase = createSupabaseServerActionClient();
     let userId = null;
     
     if (isDevelopment) {
@@ -90,7 +75,14 @@ export async function POST(request: Request) {
     } else {
       // In production, use real auth
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        console.log('Attempting to get user from auth...');
+        const authResponse = await supabase.auth.getUser();
+        console.log('Auth response received:', JSON.stringify({
+          hasUser: !!authResponse.data?.user,
+          error: authResponse.error ? authResponse.error.message : null
+        }));
+        
+        const { data: { user }, error: authError } = authResponse;
         
         if (authError) {
           console.error('Authentication error:', authError);
@@ -103,6 +95,7 @@ export async function POST(request: Request) {
         }
         
         userId = user.id;
+        console.log('Authenticated user ID:', userId);
       } catch (authError) {
         console.error('Error checking authentication:', authError);
         return NextResponse.json({ 
@@ -182,15 +175,15 @@ export async function POST(request: Request) {
             
             console.log('Action items batch to insert:', actionItemsToInsert);
             
-            const { data: actionItemsData, error: actionItemsError } = await supabase
+            const { data: actionItemsData, error } = await supabase
               .from('action_items')
               .insert(actionItemsToInsert)
               .select();
             
-            if (actionItemsError) {
-              console.error('Error creating action items:', actionItemsError);
+            if (error) {
+              console.error('Error creating action items:', error);
               actionItemsSuccess = false;
-              actionItemsError = actionItemsError;
+              actionItemsError = error;
               break;
             } else {
               console.log('Successfully inserted action items batch:', actionItemsData);
@@ -243,8 +236,9 @@ export async function POST(request: Request) {
 
 // GET - Fetch all contacts for current user
 export async function GET(request: Request) {
+  console.log('--- API: /api/contacts GET handler started ---');
   try {
-    const supabase = getSupabaseClient();
+    const supabase = createSupabaseServerActionClient();
     let userId = null;
     
     if (isDevelopment) {
@@ -253,13 +247,30 @@ export async function GET(request: Request) {
       console.log('Using development user ID for fetching contacts:', userId);
     } else {
       // In production, use real auth
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      console.log('Attempting to get user from auth...');
+      const authResponse = await supabase.auth.getUser();
+      console.log('Auth response received:', JSON.stringify({
+        hasUser: !!authResponse.data?.user,
+        error: authResponse.error ? authResponse.error.message : null
+      }));
       
-      if (authError || !user) {
+      const { data: { user }, error: authError } = authResponse;
+      
+      if (authError) {
+        console.error('Auth error details:', authError);
+        return NextResponse.json({ 
+          error: 'Authentication error', 
+          details: authError.message 
+        }, { status: 401 });
+      }
+      
+      if (!user) {
+        console.error('No user found in session');
         return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
       }
       
       userId = user.id;
+      console.log('Authenticated user ID:', userId);
     }
     
     // Get the URL parameters
@@ -267,6 +278,7 @@ export async function GET(request: Request) {
     const eventId = url.searchParams.get('eventId');
     
     // Start building the query
+    console.log('Fetching contacts for user:', userId);
     let query = supabase
       .from('contacts')
       .select('*')
@@ -274,6 +286,7 @@ export async function GET(request: Request) {
     
     // Filter by event if provided
     if (eventId) {
+      console.log('Filtering by event ID:', eventId);
       query = query.eq('event_id', eventId);
     }
     
@@ -285,6 +298,8 @@ export async function GET(request: Request) {
       console.error('Error fetching contacts:', contactsError);
       return NextResponse.json({ error: contactsError.message }, { status: 500 });
     }
+    
+    console.log(`Successfully fetched ${contacts?.length || 0} contacts`);
     
     // For each contact, get its action items
     const contactsWithActions = await Promise.all(contacts.map(async (contact: any) => {
@@ -334,7 +349,10 @@ export async function GET(request: Request) {
     
     return NextResponse.json(contactsWithActions);
   } catch (error) {
-    console.error('Error in contacts fetch:', error);
-    return NextResponse.json({ error: 'Failed to fetch contacts' }, { status: 500 });
+    console.error('Exception in contacts fetch:', error);
+    return NextResponse.json({ 
+      error: 'Failed to fetch contacts',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 } 
