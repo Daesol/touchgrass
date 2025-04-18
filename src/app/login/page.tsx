@@ -40,6 +40,18 @@ function LoginForm() {
           const supabase = createSupabaseBrowserClient()
           await supabase.auth.signOut()
           
+          // Call API to clear server-side cookies
+          await fetch('/api/auth', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              event: 'SIGNED_OUT',
+              session: null,
+            }),
+          })
+          
           // Clear all cookies to prevent issues
           document.cookie.split(';').forEach(cookie => {
             const [name] = cookie.trim().split('=')
@@ -96,6 +108,33 @@ function LoginForm() {
     handleInitialState()
   }, [clearSession, verificationNeeded, emailFromParams, errorFromParams])
   
+  // Function to sync auth tokens with the server
+  const syncAuthWithServer = async (session: any) => {
+    try {
+      console.log('Syncing auth session with server...')
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event: 'SIGNED_IN',
+          session,
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to sync auth session with server')
+      }
+      
+      console.log('Auth session synced successfully')
+      return true
+    } catch (error) {
+      console.error('Error syncing auth session:', error)
+      return false
+    }
+  }
+  
   const resendConfirmationEmail = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
     setLoading(true)
@@ -151,6 +190,15 @@ function LoginForm() {
         return
       }
       
+      // Sync the session with the server
+      const syncSuccess = await syncAuthWithServer(data.session)
+      
+      if (!syncSuccess) {
+        setError('Failed to synchronize your session. Please try again.')
+        setLoading(false)
+        return
+      }
+      
       // Email is confirmed, proceed with login
       setSuccessMessage('Login successful! Redirecting...')
       
@@ -158,7 +206,7 @@ function LoginForm() {
       setTimeout(() => {
         router.push(redirectTo)
         router.refresh()
-      }, 500)
+      }, 1000)
     } catch (err) {
       console.error('Login error:', err)
       setError('An unexpected error occurred. Please try again.')

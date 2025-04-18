@@ -23,47 +23,126 @@ export function ProfileSection() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch user and profile data on mount
   useEffect(() => {
     const fetchUserAndProfile = async () => {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
         
-        // Get the current user
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        // Try to get profile from API first as it's more reliable
+        try {
+          const profileResponse = await fetch('/api/profile', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+          });
+          
+          if (profileResponse.ok) {
+            const data = await profileResponse.json();
+            
+            if (data.profile) {
+              setProfile(data.profile);
+              setUser({ id: data.profile.id, email: data.profile.email });
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (apiError) {
+          console.error('Error fetching profile from API:', apiError);
+        }
         
-        setUser(user)
+        // If API fails, fall back to direct client-side fetch
+        const supabase = createSupabaseBrowserClient();
         
-        // Get the user's profile
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
+        // Get the current user with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        if (error) {
-          console.error('Error fetching profile:', error)
-        } else {
-          setProfile(profile)
+        try {
+          const authResponse = await Promise.race([
+            supabase.auth.getUser(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Auth request timeout')), 5000)
+            )
+          ]);
+          
+          clearTimeout(timeoutId);
+          
+          const { data: { user }, error: userError } = authResponse;
+          
+          if (userError || !user) {
+            setError('Please log in to view your profile');
+            return;
+          }
+          
+          setUser(user);
+          
+          // Create default profile immediately to ensure we have something to show
+          createDefaultProfile(user);
+          
+          // Then try to get the actual profile from the database
+          try {
+            // Try the "profiles" table in public schema
+            let { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+            
+            if (!profileError && profileData) {
+              setProfile(profileData);
+            } else {
+              // Create default profile if no profile found
+              createDefaultProfile(user);
+            }
+          } catch (profileError) {
+            createDefaultProfile(user);
+          }
+        } catch (error) {
+          setError('An unexpected error occurred');
         }
       } catch (error) {
-        console.error('Error in fetchUserAndProfile:', error)
+        setError('An unexpected error occurred');
       } finally {
         setLoading(false)
       }
     }
+    
+    const createDefaultProfile = (user: any) => {
+      // Create a default profile from the user object
+      const email = user.email || '';
+      const username = email.split('@')[0] || 'User';
+      
+      const defaultProfile: Profile = {
+        id: user.id,
+        first_name: null,
+        last_name: null,
+        display_name: username,
+        avatar_url: null,
+        job_title: null,
+        company: null,
+        bio: null
+      };
+      
+      setProfile(defaultProfile);
+    };
     
     fetchUserAndProfile()
   }, [])
 
   // Handle sign out
   const handleSignOut = async () => {
-    const supabase = createSupabaseBrowserClient()
-    await supabase.auth.signOut()
-    window.location.href = '/login'
+    try {
+      const supabase = createSupabaseBrowserClient()
+      await supabase.auth.signOut()
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('Error signing out:', error)
+      // Fallback in case sign out fails
+      window.location.href = '/login'
+    }
   }
 
   // Set display name based on available profile data
@@ -100,6 +179,25 @@ export function ProfileSection() {
           </CardContent>
         </Card>
       </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile Error</CardTitle>
+          <CardDescription>{error}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Button variant="outline" className="w-full" onClick={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out and Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     )
   }
 

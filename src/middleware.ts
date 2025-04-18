@@ -149,6 +149,35 @@ export async function middleware(request: NextRequest) {
     });
   }
   
+  // Special handling for logout route
+  if (pathname === '/logout') {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('clear_session', 'true')
+    loginUrl.searchParams.set('from', 'logout_page')
+    
+    const response = NextResponse.redirect(loginUrl)
+    
+    // Clear auth cookies
+    const cookiePrefix = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)/)?.[1] || ''
+    if (cookiePrefix) {
+      // Clear base auth token
+      response.cookies.set(`sb-${cookiePrefix}-auth-token`, '', { 
+        maxAge: 0,
+        path: '/' 
+      })
+      
+      // Clear fragmented auth tokens
+      for (let i = 0; i < 5; i++) {
+        response.cookies.set(`sb-${cookiePrefix}-auth-token.${i}`, '', { 
+          maxAge: 0,
+          path: '/' 
+        })
+      }
+    }
+    
+    return response
+  }
+  
   // VERY IMPORTANT: Routes that should completely bypass middleware processing
   if (ROUTES.exempt.some(route => pathname === route || pathname.startsWith(`${route}/`)) ||
       ROUTES.static.test(pathname)) {
@@ -204,7 +233,25 @@ export async function middleware(request: NextRequest) {
     const { supabase, res } = createSupabaseReqResClient(request)
     
     // Get user data with error handling
-    const { data, error } = await supabase.auth.getUser()
+    let userData
+    try {
+      userData = await supabase.auth.getUser()
+    } catch (authError) {
+      console.error('Middleware Error:', authError)
+      
+      // For auth errors on non-login pages, redirect to login
+      if (!isPublicRoute && pathname !== '/login') {
+        const loginUrl = new URL('/login', request.url)
+        loginUrl.searchParams.set('clear_session', 'true')
+        loginUrl.searchParams.set('error', 'Authentication failed')
+        return NextResponse.redirect(loginUrl)
+      }
+      
+      // For auth errors on public routes, just continue
+      return NextResponse.next()
+    }
+    
+    const { data, error } = userData
     
     // Create a response object to build on
     let response = res

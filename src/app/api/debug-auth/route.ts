@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createSupabaseServerActionClient()
+    const supabase = await createSupabaseServerActionClient()
     const searchParams = request.nextUrl.searchParams
     const action = searchParams.get('action') || 'status'
     

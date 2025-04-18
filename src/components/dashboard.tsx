@@ -356,10 +356,31 @@ export default function Dashboard() {
           console.error('Error saving contact:', errorData);
           alert("Failed to save contact. See console for details.");
         } else {
-          const newContact = await response.json();
-          console.log("Received new contact from API:", newContact);
-          // Add the returned contact from API to our UI state
-          setUIContacts([...uiContacts, newContact]);
+          const apiContact = await response.json();
+          console.log("Received new contact from API:", apiContact);
+          
+          // Transform the API response to match client-side format
+          const clientContact: Contact = {
+            id: apiContact.id,
+            eventId: apiContact.event_id || "",
+            eventTitle: apiContact.event_title || "",
+            linkedinUrl: apiContact.linkedin_url || "",
+            name: apiContact.name || "",
+            position: apiContact.position || "",
+            company: apiContact.company || "",
+            summary: apiContact.summary || "",
+            voiceMemo: {
+              url: apiContact.voice_memo?.url || "",
+              transcript: apiContact.voice_memo?.transcript || "",
+              keyPoints: apiContact.voice_memo?.key_points || []
+            },
+            actionItems: [], // Initialize with empty array since new contacts don't have action items yet
+            rating: apiContact.rating || 0,
+            date: apiContact.date ? new Date(apiContact.date).toLocaleDateString() : new Date().toLocaleDateString()
+          };
+          
+          // Add the properly formatted contact to UI state
+          setUIContacts([...uiContacts, clientContact]);
         }
       }
 

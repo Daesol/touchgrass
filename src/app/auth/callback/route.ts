@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     // Debug: log all search params for troubleshooting
     console.log('Auth callback URL params:', Object.fromEntries(searchParams.entries()))
     
-    const supabase = createSupabaseServerActionClient()
+    const supabase = await createSupabaseServerActionClient()
     
     if (code) {
       // Exchange the code for a session

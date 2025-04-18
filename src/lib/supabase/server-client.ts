@@ -6,10 +6,13 @@ import { NextRequest, NextResponse } from 'next/server'
 const DEBUG_COOKIES = true
 
 // Function to get complete cookie value from fragments
-function getCompleteTokenFromFragments(cookieStore: any, baseName: string): string {
+async function getCompleteTokenFromFragments(cookieStore: any, baseName: string): Promise<string> {
+  // If cookieStore is a promise, await it
+  const resolvedCookieStore = await cookieStore
+  
   // With Supabase SSR, tokens are split across multiple cookies with numeric suffixes
   // First try the base name (though often this won't exist for large tokens)
-  const baseToken = cookieStore.get(baseName)
+  const baseToken = resolvedCookieStore.get(baseName)
   if (baseToken?.value) {
     if (DEBUG_COOKIES) console.log(`[Complete Cookie] Using base token for ${baseName}`)
     return baseToken.value
@@ -21,7 +24,7 @@ function getCompleteTokenFromFragments(cookieStore: any, baseName: string): stri
   // Collect all fragments (we don't know how many there are)
   for (let i = 0; i < 10; i++) {
     const fragmentName = `${baseName}.${i}`
-    const fragment = cookieStore.get(fragmentName)
+    const fragment = resolvedCookieStore.get(fragmentName)
     
     if (fragment?.value) {
       if (DEBUG_COOKIES) console.log(`[Fragment] Found ${fragmentName}`)
@@ -52,7 +55,7 @@ function getCompleteTokenFromFragments(cookieStore: any, baseName: string): stri
   return ''
 }
 
-export function createSupabaseServerComponentClient() {
+export async function createSupabaseServerComponentClient() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -60,11 +63,11 @@ export function createSupabaseServerComponentClient() {
       cookies: {
         async get(name: string) {
           try {
-            const cookieStore = await cookies()
+            const cookieStore = cookies()
             
             // Use the special handling for auth tokens
             if (name.includes('auth-token')) {
-              const completeValue = getCompleteTokenFromFragments(cookieStore, name)
+              const completeValue = await getCompleteTokenFromFragments(cookieStore, name)
               if (DEBUG_COOKIES) {
                 console.log(`[Cookie Read] ${name}: ${completeValue ? 'reconstructed' : 'not found'}`)
               }
@@ -72,7 +75,7 @@ export function createSupabaseServerComponentClient() {
             }
             
             // Default behavior for other cookies
-            const cookie = cookieStore.get(name)
+            const cookie = (await cookieStore).get(name)
             if (DEBUG_COOKIES && (name.includes('supabase') || name.includes('auth'))) {
               console.log(`[Cookie Read] ${name}: ${cookie ? 'found' : 'not found'}`)
             }
@@ -96,7 +99,7 @@ export function createSupabaseServerComponentClient() {
   )
 }
 
-export function createSupabaseServerActionClient() {
+export async function createSupabaseServerActionClient() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -104,11 +107,11 @@ export function createSupabaseServerActionClient() {
       cookies: {
         async get(name: string) {
           try {
-            const cookieStore = await cookies()
+            const cookieStore = cookies()
             
             // Use the special handling for auth tokens
             if (name.includes('auth-token')) {
-              const completeValue = getCompleteTokenFromFragments(cookieStore, name)
+              const completeValue = await getCompleteTokenFromFragments(cookieStore, name)
               if (DEBUG_COOKIES) {
                 console.log(`[Action Cookie Read] ${name}: ${completeValue ? 'reconstructed' : 'not found'}`)
               }
@@ -116,7 +119,7 @@ export function createSupabaseServerActionClient() {
             }
             
             // Default behavior for other cookies
-            const cookie = cookieStore.get(name)
+            const cookie = (await cookieStore).get(name)
             if (DEBUG_COOKIES && (name.includes('supabase') || name.includes('auth'))) {
               console.log(`[Action Cookie Read] ${name}: ${cookie ? 'found' : 'not found'}`)
             }
@@ -129,13 +132,13 @@ export function createSupabaseServerActionClient() {
         },
         async set(name: string, value: string, options?: CookieOptions) {
           try {
-            const cookieStore = await cookies()
+            const cookieStore = cookies()
             
             if (DEBUG_COOKIES) {
               console.log(`[Action Cookie Set] Setting ${name}`)
             }
             
-            cookieStore.set({
+            (await cookieStore).set({
               name,
               value,
               ...options,
@@ -146,13 +149,13 @@ export function createSupabaseServerActionClient() {
         },
         async remove(name: string, options?: CookieOptions) {
           try {
-            const cookieStore = await cookies()
+            const cookieStore = cookies()
             
             if (DEBUG_COOKIES) {
               console.log(`[Action Cookie Remove] Removing ${name}`)
             }
             
-            cookieStore.set({
+            (await cookieStore).set({
               name,
               value: '',
               ...options,

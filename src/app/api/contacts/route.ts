@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerActionClient } from '@/lib/supabase/server-client';
 import { v4 as uuidv4 } from 'uuid';
 
-// DEVELOPMENT MOCK USER - In production, this would come from auth
-// Use a static UUID so that contacts persist between page reloads
+// DEVELOPMENT MOCK USER - Only used in development when no authenticated user exists
 const DEV_USER_ID = 'b3f5d3e1-c7a9-4f1b-9c6e-2d5a86bc2e11';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -65,44 +64,31 @@ export async function POST(request: Request) {
     }
     
     // Use our enhanced server client with cookie handling
-    const supabase = createSupabaseServerActionClient();
+    const supabase = await createSupabaseServerActionClient();
     let userId = null;
     
-    if (isDevelopment) {
-      // Use mock user in development
+    // Always try to get the authenticated user first
+    console.log('Attempting to get user from auth...');
+    const authResponse = await supabase.auth.getUser();
+    console.log('Auth response received:', JSON.stringify({
+      hasUser: !!authResponse.data?.user,
+      error: authResponse.error ? authResponse.error.message : null
+    }));
+    
+    // If we have an authenticated user, use that
+    if (authResponse.data?.user) {
+      userId = authResponse.data.user.id;
+      console.log('Using authenticated user ID:', userId);
+    } 
+    // Otherwise, only use the development account in development mode
+    else if (isDevelopment) {
       userId = DEV_USER_ID;
       console.log('Using development user ID:', userId);
-    } else {
-      // In production, use real auth
-      try {
-        console.log('Attempting to get user from auth...');
-        const authResponse = await supabase.auth.getUser();
-        console.log('Auth response received:', JSON.stringify({
-          hasUser: !!authResponse.data?.user,
-          error: authResponse.error ? authResponse.error.message : null
-        }));
-        
-        const { data: { user }, error: authError } = authResponse;
-        
-        if (authError) {
-          console.error('Authentication error:', authError);
-          return NextResponse.json({ error: 'Authentication error', details: authError.message }, { status: 401 });
-        }
-        
-        if (!user) {
-          console.error('No user found in session');
-          return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
-        }
-        
-        userId = user.id;
-        console.log('Authenticated user ID:', userId);
-      } catch (authError) {
-        console.error('Error checking authentication:', authError);
-        return NextResponse.json({ 
-          error: 'Error checking authentication',
-          details: authError instanceof Error ? authError.message : "Unknown error"
-        }, { status: 500 });
-      }
+    } 
+    // In production, enforce authentication
+    else {
+      console.error('No authenticated user found');
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
     
     const contactData = getContactData(body);
@@ -238,39 +224,31 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   console.log('--- API: /api/contacts GET handler started ---');
   try {
-    const supabase = createSupabaseServerActionClient();
+    const supabase = await createSupabaseServerActionClient();
     let userId = null;
     
-    if (isDevelopment) {
-      // Use mock user in development
+    // Always try to get the authenticated user first
+    console.log('Attempting to get user from auth...');
+    const authResponse = await supabase.auth.getUser();
+    console.log('Auth response received:', JSON.stringify({
+      hasUser: !!authResponse.data?.user,
+      error: authResponse.error ? authResponse.error.message : null
+    }));
+    
+    // If we have an authenticated user, use that
+    if (authResponse.data?.user) {
+      userId = authResponse.data.user.id;
+      console.log('Using authenticated user ID:', userId);
+    } 
+    // Otherwise, only use the development account in development mode
+    else if (isDevelopment) {
       userId = DEV_USER_ID;
       console.log('Using development user ID for fetching contacts:', userId);
-    } else {
-      // In production, use real auth
-      console.log('Attempting to get user from auth...');
-      const authResponse = await supabase.auth.getUser();
-      console.log('Auth response received:', JSON.stringify({
-        hasUser: !!authResponse.data?.user,
-        error: authResponse.error ? authResponse.error.message : null
-      }));
-      
-      const { data: { user }, error: authError } = authResponse;
-      
-      if (authError) {
-        console.error('Auth error details:', authError);
-        return NextResponse.json({ 
-          error: 'Authentication error', 
-          details: authError.message 
-        }, { status: 401 });
-      }
-      
-      if (!user) {
-        console.error('No user found in session');
-        return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
-      }
-      
-      userId = user.id;
-      console.log('Authenticated user ID:', userId);
+    } 
+    // In production, enforce authentication
+    else {
+      console.error('No authenticated user found');
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
     
     // Get the URL parameters
