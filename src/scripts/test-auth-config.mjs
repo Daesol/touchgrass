@@ -16,6 +16,11 @@ console.log('Supabase Anon Key:', supabaseAnonKey ? 'Found (not showing for secu
 // Create Supabase client
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Define a base URL - defaults to localhost for this test script
+// In a real app, this should come from environment variables (e.g., VERCEL_URL, NEXT_PUBLIC_SITE_URL)
+const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000'
+const REDIRECT_URL = `${BASE_URL}/auth/callback`
+
 async function checkAuthConfig() {
   console.log('Checking Supabase AUTH configuration...')
   
@@ -45,7 +50,7 @@ async function checkAuthConfig() {
       email: testEmail,
       password: testPassword,
       options: {
-        emailRedirectTo: `http://localhost:3000/auth/callback`,
+        emailRedirectTo: REDIRECT_URL, // Use dynamic redirect URL
       }
     })
     
@@ -70,7 +75,7 @@ async function checkAuthConfig() {
     try {
       const { data, error: urlError } = await supabase.auth.resetPasswordForEmail(
         'test@example.com',
-        { redirectTo: 'http://localhost:3000/auth/callback' }
+        { redirectTo: REDIRECT_URL } // Use dynamic redirect URL
       )
       
       if (urlError) {
@@ -94,7 +99,7 @@ async function checkAuthConfig() {
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'http://localhost:3000/auth/callback',
+          redirectTo: REDIRECT_URL, // Use dynamic redirect URL
           skipBrowserRedirect: true
         }
       })
@@ -127,10 +132,10 @@ async function checkAuthConfig() {
     }
     
     console.log('\nRecommendations:')
-    console.log('1. Ensure your site URL in Supabase Auth settings matches your production URL')
-    console.log('2. Add localhost:3000 to the redirect URLs for local development')
+    console.log(`1. Ensure your Site URL in Supabase Auth settings matches your deployment URL (e.g., ${process.env.VERCEL_URL || 'https://your-app.vercel.app'})`)
+    console.log(`2. Add your local development URL (e.g., ${BASE_URL}) to the Redirect URLs list in Supabase Auth settings.`)
     console.log('3. Verify that email confirmation is enabled for security')
-    console.log('4. Set up at least one OAuth provider for easier sign-in')
+    console.log('4. Check that required OAuth providers (like Google) are enabled and correctly configured in Supabase Auth settings.')
     
     console.log('\nAuth configuration check completed')
     

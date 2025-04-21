@@ -1,4 +1,4 @@
-import { createSupabaseServerComponentClient } from '@/lib/supabase/server-client'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Home, Users, Calendar, ClipboardList, Bell, User } from 'lucide-react'
 import Link from 'next/link'
@@ -88,7 +88,7 @@ export default async function DashboardLayout({
     }
     
     // Normal auth flow for runtime requests
-    const supabase = await createSupabaseServerComponentClient()
+    const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     
     // Handle auth errors gracefully

@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Session, User } from '@supabase/supabase-js'
+import { Session, User, AuthChangeEvent } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 
 /**
  * Hook for authentication state and operations
@@ -22,7 +22,7 @@ export function useAuth() {
     async function initializeAuth() {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
+        const supabase = createClient()
         
         // Check for active session
         const { data: { session } } = await supabase.auth.getSession()
@@ -31,7 +31,7 @@ export function useAuth() {
         
         // Subscribe to changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (event, session) => {
+          (event: AuthChangeEvent, session: Session | null) => {
             setSession(session)
             setUser(session?.user ?? null)
             
@@ -59,7 +59,7 @@ export function useAuth() {
     async (email: string, password: string) => {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
+        const supabase = createClient()
         
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -84,12 +84,12 @@ export function useAuth() {
     async (provider: 'google' | 'github' | 'facebook') => {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
+        const supabase = createClient()
         
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: `${window.location.origin}/api/auth/callback`
+            redirectTo: `${window.location.origin}/api/auth/callback?next=/dashboard`
           }
         })
         
@@ -111,7 +111,7 @@ export function useAuth() {
     async (email: string, password: string) => {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
+        const supabase = createClient()
         
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -139,7 +139,7 @@ export function useAuth() {
     async (redirectTo = '/login') => {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
+        const supabase = createClient()
         
         // Sign out from Supabase
         const { error } = await supabase.auth.signOut()
@@ -175,7 +175,7 @@ export function useAuth() {
     async (email: string) => {
       try {
         setLoading(true)
-        const supabase = createSupabaseBrowserClient()
+        const supabase = createClient()
         
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/features/auth/reset-password`
