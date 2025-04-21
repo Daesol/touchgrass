@@ -2,17 +2,19 @@
 
 import type { Event, Contact } from "@/types/models"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calendar, MapPin, Building, Users, Clock } from "lucide-react"
+import { Calendar, MapPin, Building, Users, Clock, Trash2 } from "lucide-react"
 import { useMemo } from "react"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Briefcase } from "lucide-react"
 import { User } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 
 export type EventListProps = {
   events: Event[]
   onSelectEvent: (event: Event) => void
+  onInitiateDeleteEvent: (event: Event) => void
   contacts: Contact[]
   searchQuery?: string
   selectedEvent?: Event | null
@@ -36,7 +38,7 @@ const getColorByIndex = (index: number): string[] => {
   return gradients[index % gradients.length] ?? gradients[0];
 };
 
-export function EventList({ events, onSelectEvent, contacts, searchQuery, selectedEvent, onSelectContact, compact }: EventListProps) {
+export function EventList({ events, onSelectEvent, onInitiateDeleteEvent, contacts, searchQuery, selectedEvent, onSelectContact, compact }: EventListProps) {
   const normalizedSearchQuery = (searchQuery ?? '').toLowerCase();
 
   // Filter events based ONLY on the search query
@@ -84,42 +86,60 @@ export function EventList({ events, onSelectEvent, contacts, searchQuery, select
         return (
           <Card
             key={event.id}
-            className={`overflow-hidden cursor-pointer hover:shadow-lg transition-shadow duration-200 dark:hover:shadow-primary/20 border border-border rounded-lg group`}
-            onClick={() => onSelectEvent(event)} // Use onSelectEvent prop
+            className={`relative overflow-hidden border border-border rounded-lg group`}
           >
             {/* Top border gradient */}
             <div className={`h-2 bg-gradient-to-r ${gradientClass}`}></div>
             
-            <CardContent className={`p-4 ${lightBgClass} bg-opacity-30 group-hover:bg-opacity-40 transition-colors`}>
-              <CardTitle className={`mb-2 text-lg font-semibold ${textClass}`}>{event.title}</CardTitle>
-              <CardDescription className="space-y-1 text-sm text-muted-foreground">
-                {event.location && (
-                  <div className="flex items-center">
-                    <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span>{event.location}</span>
-                  </div>
-                )}
-                {event.company && (
-                  <div className="flex items-center">
-                    <Building className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span>{event.company}</span>
-                  </div>
-                )}
-                {event.date && (
-                   <div className="flex items-center">
-                    <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
-                    {/* Format date nicely if needed, e.g., using date-fns */}
-                    <span>{new Date(event.date).toLocaleDateString()}</span>
-                  </div>
-                )}
-                 {contactCount > 0 && (
-                  <div className="flex items-center pt-1">
-                    <Users className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span>{contactCount} {contactCount === 1 ? 'Contact' : 'Contacts'}</span>
-                  </div>
-                )}
-              </CardDescription>
-            </CardContent>
+            {/* Delete Button (Top Right) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-3 right-3 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent card click event
+                onInitiateDeleteEvent(event);
+              }}
+              aria-label="Delete Event"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+
+            {/* Make content clickable for selection */}
+            <div
+              className="cursor-pointer hover:shadow-lg transition-shadow duration-200 dark:hover:shadow-primary/20"
+              onClick={() => onSelectEvent(event)}
+            >
+              <CardContent className={`p-4 ${lightBgClass} bg-opacity-30 group-hover:bg-opacity-40 transition-colors`}>
+                <CardTitle className={`mb-2 text-lg font-semibold ${textClass} pr-10`}>{event.title}</CardTitle>
+                <CardDescription className="space-y-1 text-sm text-muted-foreground">
+                  {event.location && (
+                    <div className="flex items-center">
+                      <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span>{event.location}</span>
+                    </div>
+                  )}
+                  {event.company && (
+                    <div className="flex items-center">
+                      <Building className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span>{event.company}</span>
+                    </div>
+                  )}
+                  {event.date && (
+                     <div className="flex items-center">
+                      <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span>{new Date(event.date).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                   {contactCount > 0 && (
+                    <div className="flex items-center pt-1">
+                      <Users className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span>{contactCount} {contactCount === 1 ? 'Contact' : 'Contacts'}</span>
+                    </div>
+                  )}
+                </CardDescription>
+              </CardContent>
+            </div>
           </Card>
         );
       })}

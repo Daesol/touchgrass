@@ -15,6 +15,18 @@ import { EventSelector } from "@/components/features/events/event-selector"
 import { ClientEventForm } from "@/components/features/events/client-event-form"
 import { toast } from "@/components/ui/use-toast"
 import { Event, Contact, Task, ActionItem, Profile } from "@/types/models"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { DeleteEventDialog } from "@/components/features/events/delete-event-dialog"
 
 export default function Dashboard() {
   console.log("Dashboard component rendering");
@@ -41,6 +53,8 @@ export default function Dashboard() {
   const [uiEvents, setUIEvents] = useState<Event[]>([])
   const [uiContacts, setUIContacts] = useState<Contact[]>([])
   const [uiActionItems, setUIActionItems] = useState<ActionItem[]>([])
+  const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   
   useEffect(() => {
     let isMounted = true;
@@ -261,6 +275,69 @@ export default function Dashboard() {
     }
   };
 
+  const handleInitiateDeleteEvent = (event: Event) => {
+    console.log("Initiating delete for event:", event.title);
+    setEventToDelete(event);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleConfirmDeleteEvent = async (eventData: Event, contactIdsToDelete: string[]) => {
+    console.log(`Confirmed delete for event: ${eventData.title} (ID: ${eventData.id})`);
+    console.log(`Deleting ${contactIdsToDelete.length} associated contacts:`, contactIdsToDelete);
+
+    try {
+      if (contactIdsToDelete.length > 0) {
+        const idsQueryParam = contactIdsToDelete.join(',');
+        const contactResponse = await fetch(`/api/contacts?ids=${idsQueryParam}`, { 
+            method: 'DELETE' 
+        });
+        
+        if (!contactResponse.ok) {
+           console.error("Failed to delete some contacts. Server response:", await contactResponse.text());
+           toast({ title: "Warning", description: "Failed to delete selected contacts, but proceeding with event deletion.", variant: "destructive" });
+        } else {
+           setUIContacts(prev => prev.filter(c => !contactIdsToDelete.includes(c.id)));
+           console.log("Successfully deleted associated contacts.");
+           setUIActionItems(prev => prev.filter(item => !item.contact_id || !contactIdsToDelete.includes(item.contact_id)));
+           console.log("Updated UI action items state after contact deletion.");
+        }
+      }
+
+      const eventResponse = await fetch(`/api/events/${eventData.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!eventResponse.ok) {
+        let errorMsg = `Failed to delete event ${eventData.title}`;
+        try {
+            const errorData = await eventResponse.json();
+            errorMsg = errorData?.error?.message || errorData?.message || errorMsg;
+        } catch (e) { /* Ignore parsing error */ }
+        throw new Error(errorMsg);
+      }
+
+      toast({ title: "Event Deleted", description: `"${eventData.title}" was successfully deleted.` });
+
+      setUIEvents(prev => prev.filter(e => e.id !== eventData.id));
+      setUIActionItems(prev => prev.filter(item => item.event_id !== eventData.id));
+      console.log("Updated UI action items state after event deletion.");
+
+      setShowDeleteConfirmation(false);
+      setEventToDelete(null);
+
+    } catch (err) {
+      console.error("Error during deletion process:", err);
+      toast({ title: "Error During Deletion", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+      setShowDeleteConfirmation(false);
+      setEventToDelete(null);
+    }
+  };
+
+  const handleCancelDeleteEvent = () => {
+    setShowDeleteConfirmation(false);
+    setEventToDelete(null);
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto max-w-4xl p-4 flex items-center justify-center h-screen bg-background">
@@ -370,10 +447,11 @@ export default function Dashboard() {
       mainContent = (
           <Tabs defaultValue="events" value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
               <TabsContent value="events" className="mt-4 flex-grow">
-                  <EventList 
-                    events={uiEvents} 
-                    onSelectEvent={handleSelectEvent} 
-                    contacts={uiContacts} 
+                  <EventList
+                    events={uiEvents as Event[]}
+                    onSelectEvent={handleSelectEvent}
+                    onInitiateDeleteEvent={handleInitiateDeleteEvent}
+                    contacts={uiContacts}
                     searchQuery=""
                     selectedEvent={selectedEvent}
                    />
@@ -467,6 +545,14 @@ export default function Dashboard() {
           showContactOption={uiEvents.length > 0} 
         />
       )}
+
+      <DeleteEventDialog
+        event={eventToDelete}
+        contacts={uiContacts}
+        isOpen={showDeleteConfirmation}
+        onClose={handleCancelDeleteEvent}
+        onConfirmDelete={handleConfirmDeleteEvent}
+      />
     </div>
   )
 }
