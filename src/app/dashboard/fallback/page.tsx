@@ -3,6 +3,9 @@
 import React, { useState } from 'react'
 import { HomeIcon, UsersIcon, CalendarIcon, ClipboardListIcon, BellIcon, UserIcon, PlusIcon, ArrowLeftIcon } from 'lucide-react'
 import Link from 'next/link'
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoIcon, PlusCircleIcon, RefreshCwIcon, AlertCircleIcon } from "lucide-react";
 
 export default function FallbackDashboard() {
   const [activeTab, setActiveTab] = useState<string>('home')
@@ -161,4 +164,29 @@ export default function FallbackDashboard() {
       </div>
     </div>
   )
+}
+
+function DebugCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+function InstructionsCard() {
+  return (
+    <DebugCard title="Instructions">
+      <p className="text-sm">
+        This page helps debug authentication issues. It shows your current session
+        status, allows refreshing tokens, and provides options to reset state.
+      </p>
+      <p className="mt-2 text-sm">
+        If you&apos;re stuck in a loop, try &apos;Clear All Session Cookies&apos; first.
+      </p>
+    </DebugCard>
+  );
 } 

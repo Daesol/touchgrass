@@ -1,77 +1,33 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
-// Function to handle logout POST request
-export async function POST() {
+/**
+ * API Route to sign the user out on the server.
+ */
+export async function POST(request: NextRequest) {
   try {
-    // Initialize Supabase with admin permissions for logout
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const cookieStore = cookies();
+    // Use the server client, ensuring cookie context is available
+    const supabase = await createClient(); 
     
-    // Call Supabase's signOut method
-    const { error } = await supabase.auth.signOut()
-    
+    console.log('[API Logout] Attempting to sign out user...');
+    const { error } = await supabase.auth.signOut();
+
     if (error) {
-      console.error('Error during logout:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('[API Logout] Error signing out:', error.message);
+      // Return error but maybe still try to clear cookies client-side via response?
+      return NextResponse.json({ message: 'Server sign-out failed', error: error.message }, { status: 500 });
     }
-    
-    // Clear all Supabase auth cookies manually
-    const cookieStore = cookies()
-    const cookiesToClear = [
-      'sb-access-token',
-      'sb-refresh-token',
-      'supabase-auth-token',
-      'sb-provider-token',
-      // Add the specific cookie name from your logs
-      'sb-nlqfvldarwbkgbumnhex-auth-token',
-      'sb-nlqfvldarwbkgbumnhex-auth-token.0',
-      'sb-nlqfvldarwbkgbumnhex-auth-token.1',
-      'sb-nlqfvldarwbkgbumnhex-auth-token.2',
-      'sb-nlqfvldarwbkgbumnhex-auth-token.3',
-      'sb-nlqfvldarwbkgbumnhex-auth-token.4'
-    ]
-    
-    // Clear each cookie
-    for (const name of cookiesToClear) {
-      cookieStore.set({
-        name,
-        value: '',
-        expires: new Date(0),
-        path: '/',
-        maxAge: 0,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true
-      })
-    }
-    
-    console.log('Successfully logged out and cleared cookies')
-    
-    // Return success response with redirects
-    return NextResponse.json(
-      { success: true },
-      { 
-        status: 200,
-        headers: {
-          'Set-Cookie': 'sb-nlqfvldarwbkgbumnhex-auth-token=; Max-Age=0; Path=/; HttpOnly',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      }
-    )
-  } catch (error) {
-    console.error('Unexpected error during logout:', error)
-    return NextResponse.json({ error: 'Failed to logout' }, { status: 500 })
+
+    console.log('[API Logout] Server sign-out successful.');
+    // Supabase client's signOut configured with cookies() should handle sending
+    // the necessary Set-Cookie headers to expire the auth tokens.
+    return NextResponse.json({ message: 'Logout successful' }, { status: 200 });
+
+  } catch (err) {
+    console.error('[API Logout] Unexpected error:', err);
+    const message = err instanceof Error ? err.message : 'Unknown server error';
+    return NextResponse.json({ message: 'Server error during logout', error: message }, { status: 500 });
   }
 } 

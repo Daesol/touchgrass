@@ -1,6 +1,8 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { Database } from '@/lib/database.types'
+import { Database } from '@/types/database.types'
 import { redirect } from 'next/navigation'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 // Emergency kill switch - set to true to force fallback dashboard
 export const FORCE_FALLBACK = false

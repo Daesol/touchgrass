@@ -1,10 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser-client';
 import { useRouter } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
-import type { Event, Contact, ActionItem } from '@/contexts/SupabaseProvider';
+import type { Event, Contact, ActionItem } from '@/types/models';
+import { Session } from '@supabase/supabase-js';
 
 // Create context
 export const ClientSupabaseContext = createContext<{
@@ -42,22 +42,85 @@ export function SupabaseProviderClient({ children }: { children: React.ReactNode
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<Session['user'] | null>(null);
 
-  // Initialize data and set up auth listener
+  // Define fetch functions with useCallback BEFORE the main useEffect
+  const fetchEvents = useCallback(async () => { 
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('date', { ascending: false });
+
+      if (error) throw error;
+      setEvents(data || []);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  }, [supabase]);
+
+  const fetchContacts = useCallback(async (eventId?: string) => {
+    try {
+      let query = supabase
+        .from('contacts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (eventId) {
+        query = query.eq('event_id', eventId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      
+      if (!eventId) {
+        setContacts(data || []);
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+      return [];
+    }
+  }, [supabase]);
+
+  const fetchActionItems = useCallback(async (contactId?: string) => {
+    try {
+      let query = supabase
+        .from('action_items')
+        .select('*')
+        .order('due_date', { ascending: true });
+
+      if (contactId) {
+        query = query.eq('contact_id', contactId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      
+      if (!contactId) {
+        setActionItems(data || []);
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching action items:', error);
+      return [];
+    }
+  }, [supabase]);
+
+  // Initialize data and set up auth listener (main useEffect)
   useEffect(() => {
     async function getInitialData() {
       try {
         setLoading(true);
-        
-        // Check for existing session
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           setUser(session.user);
-          
-          // Fetch initial data
-          await fetchEvents();
-          await fetchContacts();
+          await fetchEvents(); 
+          await fetchContacts(); 
           await fetchActionItems();
         }
       } catch (error) {
@@ -67,13 +130,10 @@ export function SupabaseProviderClient({ children }: { children: React.ReactNode
       }
     }
 
-    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: string, session: Session | null) => {
         try {
-          // Don't trigger UI updates for certain events to avoid redirect loops
           if (event === 'INITIAL_SESSION') {
-            // Just set the user state without triggering data refreshes
             setUser(session?.user || null);
             return;
           }
@@ -83,18 +143,14 @@ export function SupabaseProviderClient({ children }: { children: React.ReactNode
           setUser(currentUser || null);
           
           if (currentUser) {
-            // Refresh data when user logs in
-            await fetchEvents();
+            await fetchEvents(); 
             await fetchContacts();
             await fetchActionItems();
           } else {
-            // Clear data when user logs out
             setEvents([]);
             setContacts([]);
             setActionItems([]);
             
-            // If the user was signed out and we're not already on the login page,
-            // avoid router.refresh() which could cause a loop
             if (event === 'SIGNED_OUT' && typeof window !== 'undefined' && 
                 !window.location.pathname.includes('/login')) {
               console.log('User signed out, redirecting to login');
@@ -103,9 +159,7 @@ export function SupabaseProviderClient({ children }: { children: React.ReactNode
             }
           }
           
-          // Only refresh if we're not in a sign out scenario
           if (event !== 'SIGNED_OUT') {
-            // Use a timeout to avoid potential race conditions during refresh
             setTimeout(() => {
               try {
                 router.refresh();
@@ -129,78 +183,7 @@ export function SupabaseProviderClient({ children }: { children: React.ReactNode
         console.error('Error unsubscribing from auth state change:', error);
       }
     };
-  }, [supabase, router]);
-
-  // Fetch events
-  async function fetchEvents() {
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    }
-  }
-
-  // Fetch contacts
-  async function fetchContacts(eventId?: string) {
-    try {
-      let query = supabase
-        .from('contacts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (eventId) {
-        query = query.eq('event_id', eventId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      
-      // If fetching all contacts, update the state
-      if (!eventId) {
-        setContacts(data || []);
-      }
-      
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching contacts:', error);
-      return [];
-    }
-  }
-
-  // Fetch action items
-  async function fetchActionItems(contactId?: string) {
-    try {
-      let query = supabase
-        .from('action_items')
-        .select('*')
-        .order('due_date', { ascending: true });
-
-      if (contactId) {
-        query = query.eq('contact_id', contactId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      
-      // If fetching all action items, update the state
-      if (!contactId) {
-        setActionItems(data || []);
-      }
-      
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching action items:', error);
-      return [];
-    }
-  }
+  }, [supabase, router, fetchEvents, fetchContacts, fetchActionItems]); // Dependencies are correct now
 
   // Add event
   async function addEvent(event: Omit<Event, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Event> {

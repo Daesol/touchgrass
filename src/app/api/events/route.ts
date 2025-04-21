@@ -1,189 +1,135 @@
-import { NextResponse } from 'next/server';
-import { createSupabaseServerActionClient } from '@/lib/supabase/server-client';
-import { v4 as uuidv4 } from 'uuid';
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { apiSuccess, apiError, withErrorHandling } from '@/lib/api/response'
+import { Event } from '@/types/models' // Assuming types moved to @/types/models
 
-// DEVELOPMENT MOCK USER - Only used in development when no authenticated user exists
-const DEV_USER_ID = 'b3f5d3e1-c7a9-4f1b-9c6e-2d5a86bc2e11';
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Get event data from client request
-function getEventData(body: any) {
-  return {
-    title: body.title || 'Untitled Event',
-    location: body.location || null,
-    // Store company directly if we have a company field in the DB
-    company: body.company || null,
-    date: new Date(body.date || new Date()),
-    color_index: body.colorIndex || '0',
-  };
+/**
+ * GET handler for fetching all events
+ */
+export async function GET(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return apiError('Unauthorized', 'UNAUTHORIZED', 401)
+  }
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('date', { ascending: true })
+  if (error) {
+    return apiError(error.message, 'DATABASE_ERROR', 500)
+  }
+  return apiSuccess(data || [])
 }
 
-// POST - Create a new event
-export async function POST(request: Request) {
-  console.log('--- API: /api/events POST handler started ---');
-  try {
-    // Use our enhanced server client with cookie handling
-    const supabase = await createSupabaseServerActionClient();
-    let userId = null;
-    
-    // Always try to get the authenticated user first
-    console.log('Attempting to get user from auth...');
-    const authResponse = await supabase.auth.getUser();
-    console.log('Auth response received:', JSON.stringify({
-      hasUser: !!authResponse.data?.user,
-      error: authResponse.error ? authResponse.error.message : null
-    }));
-    
-    // If we have an authenticated user, use that
-    if (authResponse.data?.user) {
-      userId = authResponse.data.user.id;
-      console.log('Using authenticated user ID:', userId);
-    } 
-    // Otherwise, only use the development account in development mode
-    else if (isDevelopment) {
-      userId = DEV_USER_ID;
-      console.log('Using development user ID:', userId);
-    } 
-    // In production, enforce authentication
-    else {
-      console.error('No authenticated user found');
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+/**
+ * POST handler for creating a new event
+ */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return apiError('Unauthorized', 'UNAUTHORIZED', 401)
+  }
+  const eventData = await request.json()
+  if (!eventData.title || !eventData.date) {
+    return apiError('Title and date are required', 'VALIDATION_ERROR', 400)
+  }
+  const { data, error } = await supabase
+    .from('events')
+    .insert({
+      ...eventData,
+      user_id: user.id,
+    })
+    .select()
+    .single()
+  if (error) {
+    return apiError(error.message, 'DATABASE_ERROR', 500)
+  }
+  return apiSuccess(data)
+}
+
+/**
+ * PUT handler for updating an event
+ */
+export async function PUT(req: NextRequest) {
+  return withErrorHandling<Event>(async () => {
+    const url = new URL(req.url)
+    const eventId = url.pathname.split('/').pop() // Assuming ID is the last segment
+
+    if (!eventId) {
+       return apiError('Event ID is required in the URL path', 'MISSING_PARAMETER', 400)
     }
-    
-    // Parse request body
-    const body = await request.json();
-    const eventData = getEventData(body);
-    
-    // Check the table structure to see what columns are available
-    const { data: tableInfo, error: tableError } = await supabase
+
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return apiError('Unauthorized', 'UNAUTHORIZED', 401)
+    }
+    const eventData = await req.json()
+    if (Object.keys(eventData).length === 0) {
+      return apiError('No update data provided', 'VALIDATION_ERROR', 400)
+    }
+    const { data: existingEvent, error: fetchError } = await supabase
       .from('events')
-      .select('*')
-      .limit(1);
-    
-    if (tableError) {
-      console.error('Error checking table structure:', tableError);
-    } else {
-      // If we got data back, log the first row to see the schema
-      if (tableInfo && tableInfo.length > 0) {
-        console.log('Available columns in events table:', Object.keys(tableInfo[0]));
-      } else {
-        console.log('No existing events found to determine schema');
-      }
+      .select('user_id')
+      .eq('id', eventId)
+      .single()
+    if (fetchError) {
+      return fetchError.code === 'PGRST116' ? apiError('Event not found', 'NOT_FOUND', 404) : apiError(fetchError.message, 'DATABASE_ERROR', 500)
     }
-    
-    // Create a base insert object with required fields
-    const insertData: Record<string, any> = {
-      user_id: userId,
-      title: eventData.title,
-      date: eventData.date,
-      color_index: eventData.color_index,
-    };
-    
-    // Only add optional fields if they exist
-    if (eventData.location) {
-      insertData.location = eventData.location;
+    if (existingEvent.user_id !== user.id) {
+      return apiError('You do not have permission to update this event', 'FORBIDDEN', 403)
     }
-    
-    // Add created_at and updated_at if the table has those columns
-    // (Most Supabase tables have these by default)
-    if (!tableError && tableInfo && tableInfo.length > 0) {
-      const sampleRow = tableInfo[0];
-      if ('created_at' in sampleRow) {
-        insertData.created_at = new Date();
-      }
-      if ('updated_at' in sampleRow) {
-        insertData.updated_at = new Date();
-      }
-      // Add company field only if it exists in the schema
-      if ('company' in sampleRow && eventData.company) {
-        insertData.company = eventData.company;
-      }
-      // Add description field if it exists (often used for notes)
-      if ('description' in sampleRow) {
-        insertData.description = eventData.company ? 
-          `Company: ${eventData.company}` : null;
-      }
-    } else {
-      // Fallback if we couldn't check the schema
-      insertData.created_at = new Date();
-      insertData.updated_at = new Date();
-    }
-    
-    console.log('Inserting event data:', insertData);
-    
     const { data, error } = await supabase
       .from('events')
-      .insert(insertData)
+      .update(eventData)
+      .eq('id', eventId)
       .select()
-      .single();
-    
+      .single()
     if (error) {
-      console.error('Error creating event:', error);
-      return NextResponse.json({ error: error.message, details: error }, { status: 500 });
+      return apiError(error.message, 'DATABASE_ERROR', 500)
     }
-    
-    return NextResponse.json(data, { status: 201 });
-  } catch (error) {
-    console.error('Error in event creation:', error);
-    return NextResponse.json({ 
-      error: 'Failed to create event',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  }
+    return apiSuccess(data)
+  })
 }
 
-// GET - Fetch all events for current user
-export async function GET(request: Request) {
-  console.log('--- API: /api/events GET handler started ---');
-  try {
-    // Use our enhanced server client with cookie handling
-    const supabase = await createSupabaseServerActionClient();
-    let userId = null;
+/**
+ * DELETE handler for deleting an event
+ */
+export async function DELETE(req: NextRequest) {
+  return withErrorHandling<{ message: string }>(async () => {
+    const url = new URL(req.url)
+    const eventId = url.pathname.split('/').pop() // Assuming ID is the last segment
     
-    // Always try to get the authenticated user first
-    console.log('Attempting to get user from auth...');
-    const authResponse = await supabase.auth.getUser();
-    console.log('Auth response received:', JSON.stringify({
-      hasUser: !!authResponse.data?.user,
-      error: authResponse.error ? authResponse.error.message : null
-    }));
-    
-    // If we have an authenticated user, use that
-    if (authResponse.data?.user) {
-      userId = authResponse.data.user.id;
-      console.log('Using authenticated user ID:', userId);
-    } 
-    // Otherwise, only use the development account in development mode
-    else if (isDevelopment) {
-      userId = DEV_USER_ID;
-      console.log('Using development user ID for fetching events:', userId);
-    } 
-    // In production, enforce authentication
-    else {
-      console.error('No authenticated user found');
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+    if (!eventId) {
+       return apiError('Event ID is required in the URL path', 'MISSING_PARAMETER', 400)
     }
     
-    // Get events
-    console.log('Fetching events for user:', userId);
-    const { data, error } = await supabase
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return apiError('Unauthorized', 'UNAUTHORIZED', 401)
+    }
+    const { data: existingEvent, error: fetchError } = await supabase
       .from('events')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching events:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      .select('user_id')
+      .eq('id', eventId)
+      .single()
+    if (fetchError) {
+      return fetchError.code === 'PGRST116' ? apiError('Event not found', 'NOT_FOUND', 404) : apiError(fetchError.message, 'DATABASE_ERROR', 500)
     }
-    
-    console.log(`Successfully fetched ${data?.length || 0} events`);
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Exception in events fetch:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch events',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  }
+    if (existingEvent.user_id !== user.id) {
+      return apiError('You do not have permission to delete this event', 'FORBIDDEN', 403)
+    }
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', eventId)
+    if (error) {
+      return apiError(error.message, 'DATABASE_ERROR', 500)
+    }
+    return apiSuccess({ message: 'Event deleted successfully' })
+  })
 } 

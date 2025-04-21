@@ -1,8 +1,10 @@
 import { createSupabaseServerComponentClient } from '@/lib/supabase/server-client'
 import { redirect } from 'next/navigation'
-import LogoutButton from '@/components/logout-button'
+import { Home, Users, Calendar, ClipboardList, Bell, User } from 'lucide-react'
 import Link from 'next/link'
 import { SafeSupabaseProvider } from '../providers'
+import { LogoutButton } from '@/components/features/auth/LogoutButton'
+import { Button } from '@/components/ui/button'
 
 // Ensure the layout is always dynamically rendered
 export const dynamic = 'force-dynamic'
@@ -90,7 +92,7 @@ export default async function DashboardLayout({
     
     // Normal auth flow for runtime requests
     const supabase = await createSupabaseServerComponentClient()
-    const { data, error } = await supabase.auth.getUser()
+    const { data: { user }, error } = await supabase.auth.getUser()
     
     // Handle auth errors gracefully
     if (error) {
@@ -100,7 +102,7 @@ export default async function DashboardLayout({
     
     // Only redirect if user is null and we're not already redirecting to login
     // This prevents potential redirect loops
-    if (!data.user) {
+    if (!user) {
       console.log('No user found, redirecting to login')
       return redirect('/login')
     }
@@ -116,7 +118,7 @@ export default async function DashboardLayout({
             </div>
             <div className="flex items-center gap-4">
               <div className="text-sm text-muted-foreground">
-                {data.user.email}
+                {user.email}
               </div>
               <LogoutButton className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md" />
             </div>

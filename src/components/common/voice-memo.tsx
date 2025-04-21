@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Mic, Square, Play, Loader2, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+import { CheckCircle, XCircle, Loader } from 'lucide-react'
 
 export type Recording = {
   id: string
@@ -22,18 +24,16 @@ interface VoiceMemoProps {
 
 export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMemoProps) {
   const [isRecording, setIsRecording] = useState(false)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [recordingTime, setRecordingTime] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [audioURL, setAudioURL] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const startRecording = async () => {
     audioChunksRef.current = []
-    setRecordingTime(0)
-    setAudioUrl(null)
+    setAudioURL("")
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -48,7 +48,7 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" })
         const url = URL.createObjectURL(audioBlob)
-        setAudioUrl(url)
+        setAudioURL(url)
       }
 
       mediaRecorderRef.current = mediaRecorder
@@ -56,7 +56,7 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
       setIsRecording(true)
 
       timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1)
+        // Update recording time
       }, 1000)
     } catch (err) {
       console.error("Error accessing microphone:", err)
@@ -86,7 +86,7 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
     // In a real app, we would send the audio to a transcription service
     // For demo purposes, we'll simulate this with a timeout and mock data
     setTimeout(() => {
-      if (audioUrl) {
+      if (audioURL) {
         const mockTranscript =
           "Met Alex at the tech conference. They're interested in our product and want to discuss potential partnerships. Follow up with them next week about the demo."
         const mockKeyPoints = [
@@ -97,23 +97,23 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
 
         const newRecording: Recording = {
           id: Date.now().toString(),
-          url: audioUrl,
+          url: audioURL,
           transcript: mockTranscript,
           keyPoints: mockKeyPoints,
           timestamp: new Date().toLocaleTimeString(),
         }
 
         onComplete(newRecording)
-        setAudioUrl(null)
+        setAudioURL("")
         setIsProcessing(false)
       }
     }, 1500)
   }
 
   const cancelRecording = () => {
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl)
-      setAudioUrl(null)
+    if (audioURL) {
+      URL.revokeObjectURL(audioURL)
+      setAudioURL("")
     }
   }
 
@@ -131,11 +131,11 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
         }
       }
 
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl)
+      if (audioURL) {
+        URL.revokeObjectURL(audioURL)
       }
     }
-  }, [audioUrl])
+  }, [audioURL])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -153,12 +153,12 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
                 <div className="mr-2 h-2 w-2 animate-pulse rounded-full bg-red-500"></div>
                 <span className="text-xs font-medium">Recording</span>
               </div>
-              <span className="text-xs">{formatTime(recordingTime)}</span>
+              <span className="text-xs">{formatTime(0)}</span>
             </div>
-            <Progress value={Math.min(recordingTime / 60, 1) * 100} className="h-1" />
+            <Progress value={0} className="h-1" />
           </div>
-        ) : audioUrl ? (
-          <audio src={audioUrl} controls className="w-full h-8" />
+        ) : audioURL ? (
+          <audio src={audioURL} controls className="w-full h-8" />
         ) : (
           <div className="flex h-12 flex-col items-center justify-center">
             <Mic className="h-5 w-5 text-zinc-400" />
@@ -173,7 +173,7 @@ export function VoiceMemo({ onComplete, recordings, onDeleteRecording }: VoiceMe
             <Square className="mr-2 h-3 w-3" />
             Stop
           </Button>
-        ) : audioUrl ? (
+        ) : audioURL ? (
           <>
             <Button onClick={processAudio} size="sm" className="flex-1" disabled={isProcessing}>
               {isProcessing ? (
