@@ -209,7 +209,7 @@ export default function Dashboard() {
              console.log("Attempting to save new action item:", item);
              try {
                const taskPayload = {
-                 text: item.text, // Use item.text directly
+                 title: item.title,
                  due_date: item.due_date,
                  contact_id: savedContact.id,
                  event_id: savedContact.event_id,
@@ -223,9 +223,9 @@ export default function Dashboard() {
 
                if (!taskResponse.ok) {
                  const taskErrorData = await taskResponse.json();
-                 console.error(`Failed to save action item "${item.text}":`, taskErrorData.message || 'Unknown error');
+                 console.error(`Failed to save action item "${item.title}":`, taskErrorData.message || 'Unknown error');
                  // Decide if failure here should prevent overall success message
-                 toast({ title: "Warning", description: `Failed to save action item: ${item.text}`, variant: "destructive" });
+                 toast({ title: "Warning", description: `Failed to save action item: ${item.title}`, variant: "destructive" });
                } else {
                   const savedTask = await taskResponse.json();
                   // Optionally update local UI state for action items (uiActionItems)
@@ -233,8 +233,8 @@ export default function Dashboard() {
                   console.log("Successfully saved action item:", savedTask.data);
                }
              } catch (taskErr) {
-               console.error(`Error saving action item "${item.text}":`, taskErr);
-               toast({ title: "Error", description: `Error saving action item: ${item.text}`, variant: "destructive" });
+               console.error(`Error saving action item "${item.title}":`, taskErr);
+               toast({ title: "Error", description: `Error saving action item: ${item.title}`, variant: "destructive" });
              }
            } else {
               // Here you might add logic to update existing action items via PUT /api/tasks/${item.id}
@@ -469,7 +469,10 @@ export default function Dashboard() {
       mainContent = (
          <ContactDetail
             contact={selectedContact}
-            event={selectedEvent}
+            event={{ 
+              ...selectedEvent, 
+              color_index: String(selectedEvent.color_index || '0') 
+            }}
             onBack={handleBackToContacts}
             onEdit={handleEditContact}
             onUpdateTask={handleUpdateTaskStatus}
@@ -511,13 +514,26 @@ export default function Dashboard() {
                    />
               </TabsContent>
               <TabsContent value="contacts" className="mt-4 flex-grow">
-                  <ContactList 
-                    contacts={uiContacts} 
-                    events={uiEvents} 
-                    compact={true} 
-                    onEditContact={handleEditContact} 
-                    onSelectContact={handleSelectContact}
-                   />
+                  {selectedContact ? (
+                    <ContactDetail
+                      contact={selectedContact}
+                      event={{ 
+                        id: selectedContact.event_id, 
+                        title: uiEvents.find(e => e.id === selectedContact.event_id)?.title || 'Unknown Event',
+                        color_index: String(uiEvents.find(e => e.id === selectedContact.event_id)?.color_index || '0')
+                      }}
+                      onBack={handleBackToContacts}
+                      onEdit={handleEditContact}
+                      onUpdateTask={handleUpdateTaskStatus}
+                    />
+                  ) : (
+                    <ContactList
+                      contacts={uiContacts}
+                      events={uiEvents}
+                      onSelectContact={handleSelectContact}
+                      onEditContact={handleEditContact}
+                    />
+                  )}
               </TabsContent>
               <TabsContent value="tasks" className="mt-4 flex-grow">
                   <TaskList tasks={tasks} contacts={uiContacts} events={uiEvents} onUpdateStatus={handleUpdateTaskStatus} />

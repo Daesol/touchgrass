@@ -88,9 +88,8 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
 
     const newItem: ActionItem = {
       id: Date.now().toString(),
-      user_id: existingContact?.user_id || 'mock_user_id',
       contact_id: existingContact?.id || null,
-      text: newActionItem.trim(),
+      title: newActionItem.trim(),
       due_date: newActionDueDate || null,
       completed: false,
       description: null,
@@ -106,7 +105,6 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
   }
 
   const handleSave = () => {
-    // Only require name as mandatory field, make linkedin_url optional
     if (!name) {
       alert("Please enter a contact name");
       return;
@@ -115,9 +113,8 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
     // Get key points from all recordings
     const allKeyPoints = recordings.flatMap((r) => r.keyPoints)
 
-    const contact: Contact = {
+    const contact: Partial<Contact> = {
       id: existingContact?.id || Date.now().toString(),
-      user_id: existingContact?.user_id || 'mock_user_id',
       event_id: event.id,
       linkedin_url: linkedin_url || undefined,
       name,
@@ -134,7 +131,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
     }
 
     console.log("Saving contact:", contact, "with action items:", actionItems);
-    onSave(contact, actionItems)
+    onSave(contact as Contact, actionItems)
   }
 
   return (
@@ -298,7 +295,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
                   {actionItems.map((item) => (
                     <li key={item.id} className="flex items-center justify-between rounded-md bg-zinc-50 px-3 py-2">
                       <div className="space-y-1">
-                        <span className="text-sm">{item.text}</span>
+                        <span className="text-sm">{item.title}</span>
                         <div className="flex items-center text-xs text-zinc-500">
                           <Calendar className="mr-1 h-3 w-3" />
                           {item.due_date ? format(new Date(item.due_date), "MMM d, yyyy") : "No due date"}

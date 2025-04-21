@@ -258,7 +258,7 @@ export function TaskList({ tasks, events, contacts, onUpdateStatus }: TaskListPr
           </div>
         ) : (
           sortedTasks.map((task) => {
-            const dateStatus = getDateStatus(task.due_date, task.completed)
+            const dateStatus = getDateStatus(task.due_date, task.completed ?? false)
             let dateBadgeVariant: "default" | "destructive" | "secondary" | "outline" = "secondary";
             let dateBadgeText = "Upcoming";
             switch (dateStatus) {
@@ -274,7 +274,7 @@ export function TaskList({ tasks, events, contacts, onUpdateStatus }: TaskListPr
                   <div className="flex items-start gap-3">
                     <Checkbox
                       id={`task-${task.id}`}
-                      checked={task.completed}
+                      checked={task.completed ?? false}
                       onCheckedChange={(checked) => {
                         onUpdateStatus(task.id, checked === true)
                       }}

@@ -34,15 +34,15 @@ export type Contact = {
 
 export type ActionItem = {
   id: string;
-  user_id: string;
+  user_id?: string;
   contact_id: string | null;
   title: string;
   description?: string | null;
   due_date: string | null;
-  completed: boolean;
+  completed: boolean | null;
   event_id?: string | null;
-  created_at?: string;
-  updated_at?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export interface Note {

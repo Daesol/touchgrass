@@ -50,29 +50,70 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
    return withErrorHandling<ActionItem>(async () => {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return apiError('Unauthorized', 'UNAUTHORIZED', 401);
+    let supabase;
+    let user;
+    try {
+        supabase = await createClient();
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError; // Throw to be caught below
+        if (!authData.user) return apiError('Unauthorized - No user found', 'UNAUTHORIZED', 401);
+        user = authData.user;
+        console.log("Authenticated user ID:", user.id);
+    } catch (authError: any) {
+        console.error("Authentication error in POST /api/tasks:", authError);
+        // Use a more specific error message if possible
+        const message = authError.message || 'Authentication failed';
+        const code = authError.code || 'AUTH_ERROR';
+        return apiError(message, code, 401);
+    }
 
-    const itemData = await request.json();
-    // Validate based on the actual schema column 'text'
-    if (!itemData.text) { 
-       return apiError('Task text content is required', 'VALIDATION_ERROR', 400);
+    let itemData;
+    try {
+        itemData = await request.json();
+        console.log("Received item data for POST /api/tasks:", itemData);
+
+        // Validate based on the actual schema column 'title' (not 'text')
+        if (!itemData.title) {
+           console.error("Validation failed: Task title content is required.", itemData);
+           return apiError('Task title content is required', 'VALIDATION_ERROR', 400);
+        }
+    } catch (parseError: any) {
+        console.error("Error parsing request JSON in POST /api/tasks:", parseError);
+        return apiError('Invalid request body', 'BAD_REQUEST', 400);
     }
 
     // Ensure user_id and completed are set, insert received data
-    const { data, error } = await supabase
-      .from('action_items')
-      .insert({ 
-          ...itemData, // contains 'text', 'due_date', 'contact_id', 'event_id' from payload
-          user_id: user.id, 
-          completed: itemData.completed !== undefined ? itemData.completed : false // Use provided completed status or default to false
-      })
-      .select()
-      .single();
-      
-    if (error) return apiError(error.message, 'DATABASE_ERROR', 500);
-    return apiSuccess(data);
+    try {
+        const insertPayload = {
+            ...itemData, // contains 'title', 'due_date', 'contact_id', 'event_id' from payload
+            user_id: user.id, // Use the authenticated user's ID
+            completed: itemData.completed ?? false // Default completed to false if not provided
+        };
+        console.log("Attempting to insert task with payload:", insertPayload);
+
+        const { data, error } = await supabase
+          .from('action_items')
+          .insert(insertPayload)
+          .select()
+          .single();
+          
+        if (error) throw error; // Throw DB error to be caught below
+
+        console.log("Successfully inserted task:", data);
+        return apiSuccess(data);
+
+    } catch (dbError: any) {
+        console.error("Database error inserting task in POST /api/tasks:", { 
+            message: dbError.message, 
+            code: dbError.code, 
+            details: dbError.details, 
+            hint: dbError.hint 
+        });
+        // Provide a more informative error response if possible
+        const message = dbError.message || 'Failed to create task due to database error';
+        const code = dbError.code || 'DATABASE_ERROR';
+        return apiError(message, code, 500);
+    }
    });
 }
 

@@ -12,7 +12,11 @@ import { gradients } from "@/components/features/events/event-list"
 
 interface ContactDetailProps {
   contact: Contact
-  event?: { id: string; colorIndex: string } // Add event prop to get color info
+  event?: { 
+    id: string; 
+    title: string;
+    color_index: string;
+  }
   onBack: () => void
   onEdit: (contact: Contact) => void
   onUpdateTask: (taskId: string, completed: boolean) => void
@@ -38,7 +42,7 @@ export function ContactDetail({ contact, event, onBack, onEdit, onUpdateTask }: 
   }
 
   // Determine the color for the event badge
-  const colorIndex = event ? parseInt(event.colorIndex || "0") : 0 // Assuming event prop has colorIndex string
+  const colorIndex = event ? parseInt(event.color_index || "0") : 0
   const [gradientClass, bgClass] = gradients[colorIndex % gradients.length]
 
   return (
