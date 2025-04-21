@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { EventList, EventListProps } from "@/components/features/events/event-list"
 import { ContactList } from "@/components/features/contacts/contact-list"
@@ -100,18 +100,22 @@ export default function Dashboard() {
     return () => { isMounted = false; };
   }, []);
 
-  const tasks: Task[] = uiActionItems.map((item) => {
-     const contact = uiContacts.find(c => c.id === item.contact_id);
-     const event = uiEvents.find(e => e.id === item.event_id);
-     return {
+  const tasks = useMemo(() => {
+    return uiActionItems.map(item => {
+      const contact = uiContacts.find(c => c.id === item.contact_id);
+      const event = uiEvents.find(e => e.id === item.event_id);
+      const eventColorIndex = event?.color_index !== undefined ? String(event.color_index) : null; 
+
+      return {
         ...item,
-        contactId: item.contact_id || '',
+        contactId: contact?.id || 'N/A',
         contactName: contact?.name || 'N/A',
-        eventId: item.event_id || '', 
+        eventId: event?.id || 'N/A',
         eventTitle: event?.title || 'N/A',
-        eventColorIndex: event?.color_index || null, 
-     };
-  });
+        eventColorIndex: eventColorIndex,
+       };
+    });
+  }, [uiActionItems, uiContacts, uiEvents]);
 
   const handleCreateEvent = (newEvent: Event) => {
     setUIEvents(prev => [newEvent, ...prev]);
@@ -158,10 +162,11 @@ export default function Dashboard() {
     setShowContactForm(true);
   };
 
-  const handleSaveContact = async (contactData: Partial<Contact>) => {
+  const handleSaveContact = async (contactData: Partial<Contact>, actionItems: ActionItem[]) => {
     const isUpdating = !!contactToEdit;
     const method = isUpdating ? 'PUT' : 'POST';
     const endpoint = isUpdating ? `/api/contacts/${contactToEdit?.id}` : '/api/contacts';
+    
     const payload = { ...contactData }; 
 
     if (!isUpdating && !payload.event_id && selectedEvent) {
@@ -176,20 +181,69 @@ export default function Dashboard() {
     console.log(`Saving contact (${method}):`, payload, `to ${endpoint}`);
 
     try {
-      const response = await fetch(endpoint, {
+      // 1. Save the main contact data
+      const contactResponse = await fetch(endpoint, {
         method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload), // Payload should only contain contact fields
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (!contactResponse.ok) {
+        const errorData = await contactResponse.json();
         throw new Error(errorData.message || `Failed to ${isUpdating ? 'update' : 'create'} contact`);
       }
 
-      const savedApiContact = await response.json();
+      const savedApiContact = await contactResponse.json();
       const savedContact: Contact = savedApiContact.data;
 
+      // 2. Handle Action Items
+      if (actionItems && Array.isArray(actionItems)) {
+         console.log(`Processing ${actionItems.length} action items for contact ${savedContact.id}`);
+
+         for (const item of actionItems) {
+           // Simple check if it looks like a new item added via the form (client-generated ID)
+           // These IDs are often timestamps like Date.now().toString()
+           const isPotentiallyNew = typeof item.id === 'string' && /^[0-9]+$/.test(item.id) && item.id.length > 10;
+
+           if (isPotentiallyNew) { 
+             console.log("Attempting to save new action item:", item);
+             try {
+               const taskPayload = {
+                 text: item.text, // Use item.text directly
+                 due_date: item.due_date,
+                 contact_id: savedContact.id,
+                 event_id: savedContact.event_id,
+                 completed: false // Default for new items (backend also defaults)
+               };
+               const taskResponse = await fetch(`/api/tasks`, { // Using /api/tasks based on previous findings
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(taskPayload),
+               });
+
+               if (!taskResponse.ok) {
+                 const taskErrorData = await taskResponse.json();
+                 console.error(`Failed to save action item "${item.text}":`, taskErrorData.message || 'Unknown error');
+                 // Decide if failure here should prevent overall success message
+                 toast({ title: "Warning", description: `Failed to save action item: ${item.text}`, variant: "destructive" });
+               } else {
+                  const savedTask = await taskResponse.json();
+                  // Optionally update local UI state for action items (uiActionItems)
+                  setUIActionItems(prev => [...prev, savedTask.data]); 
+                  console.log("Successfully saved action item:", savedTask.data);
+               }
+             } catch (taskErr) {
+               console.error(`Error saving action item "${item.text}":`, taskErr);
+               toast({ title: "Error", description: `Error saving action item: ${item.text}`, variant: "destructive" });
+             }
+           } else {
+              // Here you might add logic to update existing action items via PUT /api/tasks/${item.id}
+              console.log("Skipping potential existing action item:", item);
+           }
+         }
+      }
+
+      // 3. Update UI state for contact
       if (isUpdating) {
         setUIContacts(prev => prev.map(c => c.id === savedContact.id ? savedContact : c));
         setSelectedContact(savedContact);
@@ -547,11 +601,11 @@ export default function Dashboard() {
       )}
 
       <DeleteEventDialog
-        event={eventToDelete}
+        event={eventToDelete as any} 
         contacts={uiContacts}
         isOpen={showDeleteConfirmation}
         onClose={handleCancelDeleteEvent}
-        onConfirmDelete={handleConfirmDeleteEvent}
+        onConfirmDelete={(eventData, contactIdsToDelete) => handleConfirmDeleteEvent(eventData as Event, contactIdsToDelete)}
       />
     </div>
   )

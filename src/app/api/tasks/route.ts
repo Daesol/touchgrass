@@ -55,14 +55,19 @@ export async function POST(request: NextRequest) {
     if (authError || !user) return apiError('Unauthorized', 'UNAUTHORIZED', 401);
 
     const itemData = await request.json();
-    // Add validation here (e.g., ensure title is present)
-    if (!itemData.title) {
-       return apiError('Task title is required', 'VALIDATION_ERROR', 400);
+    // Validate based on the actual schema column 'text'
+    if (!itemData.text) { 
+       return apiError('Task text content is required', 'VALIDATION_ERROR', 400);
     }
 
+    // Ensure user_id and completed are set, insert received data
     const { data, error } = await supabase
       .from('action_items')
-      .insert({ ...itemData, user_id: user.id, completed: false }) // Default completed to false
+      .insert({ 
+          ...itemData, // contains 'text', 'due_date', 'contact_id', 'event_id' from payload
+          user_id: user.id, 
+          completed: itemData.completed !== undefined ? itemData.completed : false // Use provided completed status or default to false
+      })
       .select()
       .single();
       

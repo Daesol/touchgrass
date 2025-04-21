@@ -17,33 +17,33 @@ import { format } from "date-fns"
 
 interface ContactFormProps {
   event: Event
-  onSave: (contact: Contact) => void
+  onSave: (contact: Contact, actionItems: ActionItem[]) => void
   onCancel: () => void
   existingContact?: Contact
 }
 
 export function ContactForm({ event, onSave, onCancel, existingContact }: ContactFormProps) {
-  const [linkedinUrl, setLinkedinUrl] = useState(existingContact?.linkedinUrl || "")
+  const [linkedin_url, setLinkedinUrl] = useState(existingContact?.linkedin_url || "")
   const [manualUrl, setManualUrl] = useState("")
   const [scanMethod, setScanMethod] = useState<"qr" | "url">("url")
   const [recordings, setRecordings] = useState<Recording[]>(
-    existingContact?.voiceMemo?.url
+    existingContact?.voice_memo?.url
       ? [
           {
             id: "existing",
-            url: existingContact.voiceMemo.url,
-            transcript: existingContact.voiceMemo.transcript,
-            keyPoints: existingContact.voiceMemo.keyPoints,
-            timestamp: "",
+            url: existingContact.voice_memo.url,
+            transcript: "",
+            keyPoints: [],
+            timestamp: existingContact.updated_at || existingContact.created_at || "",
           },
         ]
-      : [],
+      : []
   )
   const [name, setName] = useState(existingContact?.name || "")
   const [position, setPosition] = useState(existingContact?.position || "")
   const [company, setCompany] = useState(existingContact?.company || "")
   const [summary, setSummary] = useState(existingContact?.summary || "")
-  const [actionItems, setActionItems] = useState<ActionItem[]>(existingContact?.actionItems || [])
+  const [actionItems, setActionItems] = useState<ActionItem[]>([])
   const [newActionItem, setNewActionItem] = useState("")
   const [newActionDueDate, setNewActionDueDate] = useState(format(new Date(), "yyyy-MM-dd"))
 
@@ -90,7 +90,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
       id: Date.now().toString(),
       user_id: existingContact?.user_id || 'mock_user_id',
       contact_id: existingContact?.id || null,
-      title: newActionItem.trim(),
+      text: newActionItem.trim(),
       due_date: newActionDueDate || null,
       completed: false,
       description: null,
@@ -106,7 +106,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
   }
 
   const handleSave = () => {
-    // Only require name as mandatory field, make linkedinUrl optional
+    // Only require name as mandatory field, make linkedin_url optional
     if (!name) {
       alert("Please enter a contact name");
       return;
@@ -119,24 +119,22 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
       id: existingContact?.id || Date.now().toString(),
       user_id: existingContact?.user_id || 'mock_user_id',
       event_id: event.id,
-      linkedin_url: linkedinUrl || undefined,
+      linkedin_url: linkedin_url || undefined,
       name,
       position,
       company,
       summary,
       email: existingContact?.email,
       phone: existingContact?.phone,
-      voice_memo: {
-        url: recordings.length > 0 ? recordings[0].url : "",
-        transcript: recordings.length > 0 ? recordings[0].transcript : "",
-        duration: 0,
-      },
+      voice_memo: recordings.length > 0 
+        ? { url: recordings[0].url, duration: 0 /* TODO: Get actual duration */ } 
+        : undefined,
       created_at: existingContact?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
 
-    console.log("Saving contact:", contact);
-    onSave(contact)
+    console.log("Saving contact:", contact, "with action items:", actionItems);
+    onSave(contact, actionItems)
   }
 
   return (
@@ -184,9 +182,9 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
               </form>
             )}
 
-            {linkedinUrl && (
+            {linkedin_url && (
               <div className="rounded-md bg-zinc-50 p-3">
-                <p className="text-sm text-zinc-700 break-all">{linkedinUrl}</p>
+                <p className="text-sm text-zinc-700 break-all">{linkedin_url}</p>
               </div>
             )}
 
@@ -300,7 +298,7 @@ export function ContactForm({ event, onSave, onCancel, existingContact }: Contac
                   {actionItems.map((item) => (
                     <li key={item.id} className="flex items-center justify-between rounded-md bg-zinc-50 px-3 py-2">
                       <div className="space-y-1">
-                        <span className="text-sm">{item.title}</span>
+                        <span className="text-sm">{item.text}</span>
                         <div className="flex items-center text-xs text-zinc-500">
                           <Calendar className="mr-1 h-3 w-3" />
                           {item.due_date ? format(new Date(item.due_date), "MMM d, yyyy") : "No due date"}

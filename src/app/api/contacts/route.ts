@@ -46,9 +46,13 @@ export async function POST(req: NextRequest) {
     if (!contactData.name || !contactData.event_id) {
       return apiError('Name and event_id are required', 'VALIDATION_ERROR', 400)
     }
+
+    // Destructure id and keep the rest of the properties
+    const { id, ...insertData } = contactData; 
+
     const { data, error } = await supabase
       .from('contacts')
-      .insert({ ...contactData, user_id: user.id })
+      .insert({ ...insertData, user_id: user.id }) // Use insertData without the client-side id
       .select()
       .single()
     if (error) {

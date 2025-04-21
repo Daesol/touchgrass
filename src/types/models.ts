@@ -74,6 +74,7 @@ export interface Profile {
 
 // Added Task type (based on ActionItem + context)
 export type Task = ActionItem & {
+  title: string;
   contactId: string
   contactName: string
   eventId: string

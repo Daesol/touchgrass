@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar, CheckSquare, Filter, User, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { format, isAfter, isBefore, isToday, parseISO } from "date-fns"
+import Link from 'next/link'
 
 interface TaskListProps {
   tasks: Task[]
@@ -22,6 +23,8 @@ interface TaskListProps {
 type FilterType = "all" | "today" | "upcoming" | "overdue" | "completed"
 
 export function TaskList({ tasks, events, contacts, onUpdateStatus }: TaskListProps) {
+  console.log("TaskList received tasks:", tasks); 
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedEvent, setSelectedEvent] = useState<string>("all")
   const [selectedContact, setSelectedContact] = useState<string>("all")
@@ -266,7 +269,7 @@ export function TaskList({ tasks, events, contacts, onUpdateStatus }: TaskListPr
             }
 
             return (
-              <Card key={task.id} className={`${task.completed ? "bg-zinc-50" : ""}`}>
+              <Card key={task.id} className={`${task.completed ? "bg-zinc-50" : "hover:bg-muted/50 transition-colors"}`}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <Checkbox
@@ -275,14 +278,15 @@ export function TaskList({ tasks, events, contacts, onUpdateStatus }: TaskListPr
                       onCheckedChange={(checked) => {
                         onUpdateStatus(task.id, checked === true)
                       }}
+                      onClick={(e) => e.stopPropagation()}
                       className="mt-1"
                     />
 
-                    <div className="flex-1 space-y-1">
+                    <Link href={`/tasks/${task.id}`} className="flex-1 space-y-1 cursor-pointer">
                       <div className="flex flex-wrap items-center gap-2">
                         <label
                           htmlFor={`task-${task.id}`}
-                          className={`font-medium ${task.completed ? "line-through text-zinc-400" : ""}`}
+                          className={`font-medium ${task.completed ? "line-through text-zinc-400" : "text-foreground"}`}
                         >
                           {task.title}
                         </label>
@@ -309,7 +313,7 @@ export function TaskList({ tasks, events, contacts, onUpdateStatus }: TaskListPr
                           </Badge>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
