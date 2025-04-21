@@ -1,5 +1,6 @@
 import { Event } from '@/types/models';
-import { useLocalStorage } from '@/hooks/storage/use-local-storage';
+import { UIEvent } from '@/lib/eventsUtils';
+import { createEventAction, getEventsAction, updateEventAction, deleteEventAction } from "@/actions/eventActions";
 
 // Mock implementation using localStorage
 // In a real application, this would be replaced with API calls
@@ -7,54 +8,52 @@ import { useLocalStorage } from '@/hooks/storage/use-local-storage';
 const STORAGE_KEY = 'touchgrass_events';
 
 export const useEventsService = () => {
-  const [events, setEvents] = useLocalStorage<Event[]>(STORAGE_KEY, []);
-
-  const getAll = (): Event[] => {
-    return events;
+  // Fetch events from the server
+  const getAll = async (): Promise<UIEvent[]> => {
+    try {
+      return await getEventsAction();
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      // Return empty array on error
+      return [];
+    }
   };
 
-  const getById = (id: string): Event | undefined => {
-    return events.find(event => event.id === id);
+  const getById = async (id: string): Promise<UIEvent | undefined> => {
+    try {
+      const events = await getEventsAction();
+      return events.find(event => event.id === id);
+    } catch (error) {
+      console.error("Error fetching event by ID:", error);
+      return undefined;
+    }
   };
 
-  const create = (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>): Event => {
-    const newEvent: Event = {
-      ...event,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    setEvents([...events, newEvent]);
-    return newEvent;
+  const create = async (event: Omit<UIEvent, 'id'>): Promise<UIEvent> => {
+    try {
+      return await createEventAction(event);
+    } catch (error) {
+      console.error("Error creating event:", error);
+      throw error;
+    }
   };
 
-  const update = (id: string, updates: Partial<Omit<Event, 'id' | 'createdAt' | 'updatedAt'>>): Event | undefined => {
-    const index = events.findIndex(event => event.id === id);
-    if (index === -1) return undefined;
-    
-    const updatedEvent: Event = {
-      ...events[index],
-      ...updates,
-      updatedAt: new Date(),
-    };
-    
-    const updatedEvents = [...events];
-    updatedEvents[index] = updatedEvent;
-    setEvents(updatedEvents);
-    
-    return updatedEvent;
+  const update = async (id: string, updates: Partial<Omit<UIEvent, 'id'>>): Promise<UIEvent | undefined> => {
+    try {
+      return await updateEventAction(id, updates);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      return undefined;
+    }
   };
 
-  const remove = (id: string): boolean => {
-    const index = events.findIndex(event => event.id === id);
-    if (index === -1) return false;
-    
-    const updatedEvents = [...events];
-    updatedEvents.splice(index, 1);
-    setEvents(updatedEvents);
-    
-    return true;
+  const remove = async (id: string): Promise<boolean> => {
+    try {
+      return await deleteEventAction(id);
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      return false;
+    }
   };
 
   return {

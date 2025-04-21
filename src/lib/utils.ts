@@ -1,2 +1,6 @@
-// Re-export utils from the utils folder
-export * from '@/utils/utils'; 
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+} 

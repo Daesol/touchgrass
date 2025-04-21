@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emergency Access - NetworkPro</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      max-width: 500px;
+      width: 100%;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 32px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 16px;
+    }
+    .alert {
+      background-color: #fff8e6;
+      border: 1px solid #ffecc7;
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 24px;
+      color: #92400e;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .button-primary {
+      background-color: #3b82f6;
+      color: white;
+    }
+    .button-warning {
+      background-color: #f59e0b;
+      color: white;
+    }
+    .button-secondary {
+      background-color: #e5e7eb;
+      color: #374151;
+    }
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">Emergency Access</div>
+      <div class="subtitle">NetworkPro Limited Functionality Mode</div>
+    </div>
+    
+    <div class="alert">
+      You're seeing this page because we detected an issue with your session or authentication.
+      This is a static emergency page with no JavaScript to ensure reliability.
+    </div>
+    
+    <div class="button-container">
+      <a href="/login?clear_session=true" class="button button-primary">Return to Login Page</a>
+      <a href="/login?clear_session=true&force=true" class="button button-warning">Force Clear Session & Login</a>
+      <a href="/" class="button button-secondary">Go to Homepage</a>
+    </div>
+    
+    <div class="footer">
+      <p>NetworkPro • Emergency Recovery Page</p>
+      <p>Try clearing your browser cookies or using incognito mode if issues persist</p>
+    </div>
+  </div>
+</body>
+</html> 

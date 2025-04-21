@@ -92,3 +92,30 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom Scrollbar Styles */
+/* Works on Chrome, Edge, and Safari */
+::-webkit-scrollbar {
+  width: 8px; /* Width of the scrollbar */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* Make track invisible */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #e5e7eb; /* Light gray thumb (Tailwind gray-200) */
+  border-radius: 10px; /* Round the corners */
+  border: 2px solid transparent; /* Optional: Adds padding around thumb */
+  background-clip: padding-box; /* Ensures border doesn't overlap thumb color */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #d1d5db; /* Slightly darker gray on hover (Tailwind gray-300) */
+}
+
+/* Basic styles for Firefox */
+* {
+  scrollbar-width: thin; /* "auto" or "thin" */
+  scrollbar-color: #e5e7eb transparent; /* thumb and track color */
+}
