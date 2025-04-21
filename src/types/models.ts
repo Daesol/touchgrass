@@ -16,18 +16,15 @@ export type Event = {
 export type Contact = {
   id: string;
   user_id: string;
-  event_id: string;
-  linkedin_url?: string;
+  event_id: string | null;
+  linkedin_url?: string | null;
   name: string;
-  position?: string;
-  company?: string;
-  summary?: string;
+  position?: string | null;
+  company?: string | null;
+  summary?: string | null;
   email?: string | null;
   phone?: string | null;
-  voice_memo?: {
-    url: string;
-    duration: number;
-  };
+  voice_memo?: any;
   created_at?: string;
   updated_at?: string;
 };

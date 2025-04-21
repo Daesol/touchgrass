@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { SafeSupabaseProvider } from '../providers'
 import { LogoutButton } from '@/components/features/auth/LogoutButton'
 import { Button } from '@/components/ui/button'
+import { BottomNavigationBar } from '@/components/layout/BottomNavigationBar'
 
 // Ensure the layout is always dynamically rendered
 export const dynamic = 'force-dynamic'
@@ -27,8 +28,8 @@ export default async function DashboardLayout({
     if (process.env.NEXT_PHASE === 'phase-production-build') {
       console.log('Build time detected, skipping auth check for static generation');
       return (
-        <div className="min-h-screen flex flex-col">
-          <header className="border-b">
+        <div className="min-h-screen h-screen flex flex-col overflow-hidden">
+          <header className="border-b sticky top-0 bg-background z-20">
             <div className="container mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Link href="/dashboard" className="text-xl font-bold">
@@ -39,16 +40,14 @@ export default async function DashboardLayout({
           </header>
           
           <SafeSupabaseProvider>
-            <main className="flex-1 container mx-auto px-4 py-6">
+            <main className="flex-1 container mx-auto px-4 py-6 pb-20 overflow-y-auto">
               {children}
             </main>
           </SafeSupabaseProvider>
           
-          <footer className="border-t py-4">
-            <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-              © {new Date().getFullYear()} NetworkPro. All rights reserved.
-            </div>
-          </footer>
+          <div className="relative z-20">
+            <BottomNavigationBar />
+          </div>
         </div>
       );
     }
@@ -58,8 +57,8 @@ export default async function DashboardLayout({
       console.log('⚠️ DEVELOPMENT MODE: Authentication check bypassed for testing');
       
       return (
-        <div className="min-h-screen flex flex-col">
-          <header className="border-b">
+        <div className="min-h-screen h-screen flex flex-col overflow-hidden">
+          <header className="border-b sticky top-0 bg-background z-20">
             <div className="container mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Link href="/dashboard" className="text-xl font-bold">
@@ -70,22 +69,20 @@ export default async function DashboardLayout({
                 <div className="text-sm text-muted-foreground">
                   <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs">DEV MODE</span> demo@test.com
                 </div>
-                <LogoutButton className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md" />
+                <LogoutButton />
               </div>
             </div>
           </header>
           
           <SafeSupabaseProvider>
-            <main className="flex-1 container mx-auto px-4 py-6">
+            <main className="flex-1 container mx-auto px-4 py-6 pb-20 overflow-y-auto">
               {children}
             </main>
           </SafeSupabaseProvider>
           
-          <footer className="border-t py-4">
-            <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-              © {new Date().getFullYear()} NetworkPro. All rights reserved.
-            </div>
-          </footer>
+          <div className="relative z-20">
+            <BottomNavigationBar />
+          </div>
         </div>
       );
     }
@@ -108,8 +105,8 @@ export default async function DashboardLayout({
     }
     
     return (
-      <div className="min-h-screen flex flex-col">
-        <header className="border-b">
+      <div className="min-h-screen h-screen flex flex-col overflow-hidden">
+        <header className="border-b sticky top-0 bg-background z-20">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/dashboard" className="text-xl font-bold">
@@ -120,22 +117,20 @@ export default async function DashboardLayout({
               <div className="text-sm text-muted-foreground">
                 {user.email}
               </div>
-              <LogoutButton className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md" />
+              <LogoutButton />
             </div>
           </div>
         </header>
         
         <SafeSupabaseProvider>
-          <main className="flex-1 container mx-auto px-4 py-6">
+          <main className="flex-1 container mx-auto px-4 py-6 pb-20 overflow-y-auto">
             {children}
           </main>
         </SafeSupabaseProvider>
         
-        <footer className="border-t py-4">
-          <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} NetworkPro. All rights reserved.
-          </div>
-        </footer>
+        <div className="relative z-20">
+          <BottomNavigationBar />
+        </div>
       </div>
     )
   } catch (err) {

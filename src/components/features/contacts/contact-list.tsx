@@ -12,6 +12,7 @@ import { gradients } from "@/components/features/events/event-list"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface ContactListProps {
   contacts: Contact[]
@@ -19,9 +20,12 @@ interface ContactListProps {
   compact?: boolean
   onEditContact?: (contact: Contact) => void
   onSelectContact?: (contact: Contact) => void
+  isSelectionMode?: boolean
+  selectedContactIds?: string[]
+  onToggleSelection?: (contactId: string) => void
 }
 
-export function ContactList({ contacts, events, compact = false, onEditContact, onSelectContact }: ContactListProps) {
+export function ContactList({ contacts, events, compact = false, onEditContact, onSelectContact, isSelectionMode = false, selectedContactIds = [], onToggleSelection }: ContactListProps) {
   // Add state for search and filters
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedEvent, setSelectedEvent] = useState<string>("all")
@@ -45,6 +49,14 @@ export function ContactList({ contacts, events, compact = false, onEditContact, 
     })
   }, [contacts, searchQuery, selectedEvent])
 
+  const handleCardClick = (contact: Contact) => {
+    if (isSelectionMode && onToggleSelection) {
+      onToggleSelection(contact.id);
+    } else if (onSelectContact) {
+      onSelectContact(contact);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="mb-4 space-y-4">
@@ -59,7 +71,7 @@ export function ContactList({ contacts, events, compact = false, onEditContact, 
             />
           </div>
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             className="h-10 w-10"
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -107,17 +119,34 @@ export function ContactList({ contacts, events, compact = false, onEditContact, 
         ) : (
           filteredContacts.map((contact) => {
             const event = events.find((e) => e.id === contact.event_id)
-            const colorIndex = event ? event.color_index || 0 : 0
-            const [gradientClass, bgClass] = gradients[colorIndex % gradients.length]
+            // Parse color_index string to number, default to 0 if invalid or null
+            const colorIndex = parseInt(event?.color_index ?? '0', 10);
+            const validColorIndex = isNaN(colorIndex) ? 0 : colorIndex;
+            const [gradientClass, bgClass] = gradients[validColorIndex % gradients.length]
+            const isSelected = isSelectionMode && selectedContactIds.includes(contact.id);
 
             return (
               <Card
                 key={contact.id}
-                className={`overflow-hidden ${onSelectContact ? "cursor-pointer hover:shadow-md transition-shadow dark:hover:shadow-zinc-800" : ""} border-l-4 border-l-gray-300`}
-                onClick={() => onSelectContact && onSelectContact(contact)}
+                className={`overflow-hidden border-l-4 border-l-gray-300 transition-all duration-150 ease-in-out 
+                    ${isSelectionMode ? "cursor-pointer" : (onSelectContact ? "cursor-pointer hover:shadow-md dark:hover:shadow-zinc-800" : "")}
+                    ${isSelected ? "ring-2 ring-primary ring-offset-2 dark:ring-offset-background" : ""}
+                `}
+                onClick={() => handleCardClick(contact)}
               >
                 <CardContent className={compact ? "p-3" : "p-4"}>
                   <div className="flex items-start justify-between">
+                    {isSelectionMode && (
+                      <div className="mr-3 flex h-full items-center pr-2">
+                        <Checkbox
+                          id={`select-${contact.id}`}
+                          checked={isSelected}
+                          onCheckedChange={() => onToggleSelection && onToggleSelection(contact.id)}
+                          aria-label={`Select contact ${contact.name}`}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    )}
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
@@ -135,20 +164,22 @@ export function ContactList({ contacts, events, compact = false, onEditContact, 
                           </div>
                         </div>
 
-                        {onEditContact && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEditContact(contact)
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                            <span className="sr-only">Edit</span>
-                          </Button>
-                        )}
+                        <div className="flex items-center space-x-1">
+                          {onEditContact && !isSelectionMode && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onEditContact(contact)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-y-1 mt-2">
@@ -176,10 +207,10 @@ export function ContactList({ contacts, events, compact = false, onEditContact, 
                   </div>
                 </CardContent>
               </Card>
-            )
+            );
           })
         )}
       </div>
     </div>
-  )
+  );
 }

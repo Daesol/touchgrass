@@ -1,135 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { apiSuccess, apiError, withErrorHandling } from '@/lib/api/response'
+import { apiSuccess, apiError, withErrorHandling, ApiErrorCode } from '@/lib/api/response'
 import { Event } from '@/types/models' // Assuming types moved to @/types/models
 
 /**
- * GET handler for fetching all events
+ * GET handler for fetching all events belonging to the authenticated user
  */
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return apiError('Unauthorized', 'UNAUTHORIZED', 401)
-  }
-  const { data, error } = await supabase
-    .from('events')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('date', { ascending: true })
-  if (error) {
-    return apiError(error.message, 'DATABASE_ERROR', 500)
-  }
-  return apiSuccess(data || [])
-}
-
-/**
- * POST handler for creating a new event
- */
-export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return apiError('Unauthorized', 'UNAUTHORIZED', 401)
-  }
-  const eventData = await request.json()
-  if (!eventData.title || !eventData.date) {
-    return apiError('Title and date are required', 'VALIDATION_ERROR', 400)
-  }
-  const { data, error } = await supabase
-    .from('events')
-    .insert({
-      ...eventData,
-      user_id: user.id,
-    })
-    .select()
-    .single()
-  if (error) {
-    return apiError(error.message, 'DATABASE_ERROR', 500)
-  }
-  return apiSuccess(data)
-}
-
-/**
- * PUT handler for updating an event
- */
-export async function PUT(req: NextRequest) {
-  return withErrorHandling<Event>(async () => {
-    const url = new URL(req.url)
-    const eventId = url.pathname.split('/').pop() // Assuming ID is the last segment
-
-    if (!eventId) {
-       return apiError('Event ID is required in the URL path', 'MISSING_PARAMETER', 400)
-    }
-
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+  return withErrorHandling<Event[]>(async () => {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
     if (authError || !user) {
-      return apiError('Unauthorized', 'UNAUTHORIZED', 401)
+      console.error("[API GET /api/events] Auth error:", authError?.message);
+      return apiError('Unauthorized', 'UNAUTHORIZED', 401);
     }
-    const eventData = await req.json()
-    if (Object.keys(eventData).length === 0) {
-      return apiError('No update data provided', 'VALIDATION_ERROR', 400)
-    }
-    const { data: existingEvent, error: fetchError } = await supabase
-      .from('events')
-      .select('user_id')
-      .eq('id', eventId)
-      .single()
-    if (fetchError) {
-      return fetchError.code === 'PGRST116' ? apiError('Event not found', 'NOT_FOUND', 404) : apiError(fetchError.message, 'DATABASE_ERROR', 500)
-    }
-    if (existingEvent.user_id !== user.id) {
-      return apiError('You do not have permission to update this event', 'FORBIDDEN', 403)
-    }
+    
+    console.log(`[API GET /api/events] User ${user.id} authenticated. Fetching events...`);
+    
     const { data, error } = await supabase
       .from('events')
-      .update(eventData)
-      .eq('id', eventId)
-      .select()
-      .single()
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: true });
+      
     if (error) {
-      return apiError(error.message, 'DATABASE_ERROR', 500)
+      console.error("[API GET /api/events] Database error:", error);
+      return apiError(error.message, 'DATABASE_ERROR', 500);
     }
-    return apiSuccess(data)
-  })
+    
+    console.log(`[API GET /api/events] Found ${data?.length || 0} events for user ${user.id}.`);
+    return apiSuccess((data || []) as Event[]);
+  });
 }
 
 /**
- * DELETE handler for deleting an event
+ * POST handler for creating a new event for the authenticated user
  */
-export async function DELETE(req: NextRequest) {
-  return withErrorHandling<{ message: string }>(async () => {
-    const url = new URL(req.url)
-    const eventId = url.pathname.split('/').pop() // Assuming ID is the last segment
+export async function POST(request: NextRequest) {
+  return withErrorHandling<Event>(async () => {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!eventId) {
-       return apiError('Event ID is required in the URL path', 'MISSING_PARAMETER', 400)
-    }
-    
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return apiError('Unauthorized', 'UNAUTHORIZED', 401)
+      console.error("[API POST /api/events] Auth error:", authError?.message);
+      return apiError('Unauthorized', 'UNAUTHORIZED', 401);
     }
-    const { data: existingEvent, error: fetchError } = await supabase
+    
+    console.log(`[API POST /api/events] User ${user.id} authenticated. Creating event...`);
+    
+    let eventData;
+    try {
+      eventData = await request.json();
+    } catch (jsonError) {
+      console.error("[API POST /api/events] Invalid JSON received:", jsonError);
+      return apiError('Invalid request body: Must be valid JSON.', 'BAD_REQUEST' as ApiErrorCode, 400);
+    }
+
+    // Basic validation
+    if (!eventData.title || !eventData.date) {
+      console.warn("[API POST /api/events] Validation failed: Title and date are required.");
+      return apiError('Title and date are required', 'VALIDATION_ERROR', 400);
+    }
+    
+    // Remove potentially harmful or disallowed fields before insert
+    delete eventData.id;
+    delete eventData.user_id;
+    delete eventData.created_at;
+    delete eventData.updated_at;
+    
+    console.log(`[API POST /api/events] Event data for creation:`, eventData);
+
+    const { data: newEvent, error: insertError } = await supabase
       .from('events')
-      .select('user_id')
-      .eq('id', eventId)
-      .single()
-    if (fetchError) {
-      return fetchError.code === 'PGRST116' ? apiError('Event not found', 'NOT_FOUND', 404) : apiError(fetchError.message, 'DATABASE_ERROR', 500)
+      .insert({
+        ...eventData,
+        user_id: user.id,
+      })
+      .select()
+      .single();
+      
+    if (insertError) {
+      console.error("[API POST /api/events] Database error:", insertError);
+      return apiError(insertError.message, 'DATABASE_ERROR', 500);
     }
-    if (existingEvent.user_id !== user.id) {
-      return apiError('You do not have permission to delete this event', 'FORBIDDEN', 403)
-    }
-    const { error } = await supabase
-      .from('events')
-      .delete()
-      .eq('id', eventId)
-    if (error) {
-      return apiError(error.message, 'DATABASE_ERROR', 500)
-    }
-    return apiSuccess({ message: 'Event deleted successfully' })
-  })
-} 
+    
+    console.log(`[API POST /api/events] Event created successfully:`, newEvent.id);
+    return apiSuccess(newEvent as Event);
+  });
+}
+
+/*
+ * PUT handler was moved to [eventId]/route.ts
+ */
+
+/*
+ * DELETE handler was moved to [eventId]/route.ts
+ */ 
